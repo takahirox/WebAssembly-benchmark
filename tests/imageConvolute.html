@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+textarea {
+  width: 640px;
+}
+</style>
+<script src="imageConvolute.js"></script>
+<script id="js_code">
+function jsImageConvolute(data, data2, width, height,
+                          weights, wwidth, wheight) {
+  var halfWWidth = (wwidth / 2) | 0;
+  var halfWHeight = (wheight / 2) | 0;
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      var r = 0;
+      var g = 0;
+      var b = 0;
+      var a = 0;
+      for (var wy = 0; wy < wheight; wy++) {
+        var sy = y + wy - halfWHeight;
+        if (sy < 0 || sy >= height)
+          continue;
+        for (var wx = 0; wx < wwidth; wx++) {
+          var sx = x + wx - halfWWidth;
+          if (sx < 0 || sx >= width)
+            continue;
+            var index = sy * width + sx;
+            var weight = weights[wy*wwidth+wx];
+            r += data[index*4+0] * weight;
+            g += data[index*4+1] * weight;
+            b += data[index*4+2] * weight;
+            a += data[index*4+3] * weight;
+        }
+      }
+      var index = y * width + x;
+      data2[index*4+0] = r | 0;
+      data2[index*4+1] = g | 0;
+      data2[index*4+2] = b | 0;
+      data2[index*4+3] = a | 0;
+    }
+  }
+}
+</script>
+<script id="ws_instantiate_code">
+var module, functions = {};
+fetch('imageConvolute.wasm')
+  .then(response => response.arrayBuffer())
+  .then(buffer => new Uint8Array(buffer))
+  .then(binary => {
+    var moduleArgs = {
+      wasmBinary: binary,
+      onRuntimeInitialized: function () {
+        functions.imageConvolute =
+          module.cwrap('imageConvolute',
+                       null,
+                       ['number', 'number', 'number',
+                        'number', 'number', 'number',
+                        'number']);
+        onReady();
+      }
+    };
+    module = Module(moduleArgs);
+  });
+</script>
+<script id="test_code">
+function start() {
+  document.getElementById('run_button').disabled = true;
+
+  var image = document.getElementById('original_image');
+
+  var width = image.width;
+  var height = image.height;
+  var loop = 10;
+
+  var weights = new Float64Array([
+    1/25, 1/25, 1/25, 1/25, 1/25,
+    1/25, 1/25, 1/25, 1/25, 1/25,
+    1/25, 1/25, 1/25, 1/25, 1/25,
+    1/25, 1/25, 1/25, 1/25, 1/25,
+    1/25, 1/25, 1/25, 1/25, 1/25
+  ]);
+  var wWidth = 5;
+  var wHeight = 5;
+
+  var jsPerformance = document.getElementById('js_performance');
+  var wsPerformance = document.getElementById('ws_performance');
+  var comparison = document.getElementById('comparison');
+
+  jsPerformance.innerText = '';
+  wsPerformance.innerText = '';
+  comparison.innerText = '';
+
+  var canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  var context = canvas.getContext('2d');
+  context.drawImage(image, 0, 0);
+  var imageData = context.getImageData(0, 0, width, height);
+
+  var jsCanvas = document.getElementById('js_canvas');
+  jsCanvas.width = width;
+  jsCanvas.height = height;
+  var jsContext = jsCanvas.getContext('2d');
+  var jsImageData = jsContext.getImageData(0, 0, width, height);
+
+  var wsCanvas = document.getElementById('ws_canvas');
+  wsCanvas.width = width;
+  wsCanvas.height = height;
+  var wsContext = wsCanvas.getContext('2d');
+  var wsImageData = wsContext.getImageData(0, 0, width, height);
+
+  var array0 = imageData.data;
+  var array1 = jsImageData.data;
+  var array2 = wsImageData.data;
+
+  function equalArray(array1, array2) {
+    if (array1.length !== array2.length)
+      return false;
+    for (var i = 0, il = array1.length; i < il; i++) {
+      if (array1[i] !== array2[i])
+        return false;
+    }
+    return true;
+  }
+
+  function checkFunctionality() {
+    jsImageConvolute(array0, array1, width, height,
+                     weights, wWidth, wHeight);
+    wsImageConvolute(array0, array2, width, height,
+                     weights, wWidth, wHeight);
+    jsContext.putImageData(jsImageData, 0, 0);
+    wsContext.putImageData(wsImageData, 0, 0);
+    return equalArray(array1, array2);
+  }
+
+  function run(func, array, loop) {
+    func(array0, array, width, height,
+         weights, wWidth, wHeight); // warm-up
+    var elapsedTime = 0.0;
+    for (var i = 0; i < loop; i++) {
+      var startTime = performance.now();
+      func(array0, array, width, height,
+           weights, wWidth, wHeight);
+      var endTime = performance.now();
+      elapsedTime += (endTime - startTime);
+    }
+    return (elapsedTime / loop).toFixed(4);
+  }
+
+  function wsImageConvolute(array1, array2, width, height,
+                            weights, wWidth, wHeight) {
+    var pointer1 = module._malloc(array1.length);
+    var pointer2 = module._malloc(array2.length);
+    var pointer3 = module._malloc(weights.length * 8);
+    var offset1 = pointer1;
+    var offset2 = pointer2;
+    var offset3 = pointer3 / 8;
+    module.HEAPU8.set(array1, offset1);
+    module.HEAPU8.set(array2, offset2);
+    module.HEAPF64.set(weights, offset3);
+    functions.imageConvolute(pointer1, pointer2, width, height,
+                             pointer3, wWidth, wHeight);
+    array2.set(module.HEAPU8.subarray(offset2, offset2 + array2.length));
+    module._free(pointer1);
+    module._free(pointer2);
+    module._free(pointer3);
+  }
+
+  // don't use Promise for the non Promise support browsers so far.
+  setTimeout(function () {
+    if (! checkFunctionality()) {
+      document.getElementById('message').innerText =
+       'Two functions seem not equeal';
+      document.getElementById('run_button').disabled = false;
+      return;
+    }
+    setTimeout(function () {
+      jsPerformance.innerText = run(jsImageConvolute, array1, width, height, loop);
+      setTimeout(function () {
+        wsPerformance.innerText = run(wsImageConvolute, array2, width, height, loop);
+        comparison.innerText =
+          (Number(jsPerformance.innerText) /
+             Number(wsPerformance.innerText)).toFixed(4);
+        document.getElementById('message').innerText = 'Done';
+        document.getElementById('run_button').disabled = false;
+      });
+      document.getElementById('message').innerText = 'Running WebAssembly';
+    });
+    document.getElementById('message').innerText = 'Running JavaScript';
+  });
+
+  document.getElementById('message').innerText = 'Checking equality';
+}
+</script>
+<script>
+function onReady() {
+  document.getElementById('run_button').disabled = false;
+  document.getElementById('message').innerText = 'Ready';
+}
+
+function init() {
+  putCode('test_code_area', document.getElementById('test_code').text.trim());
+  putCode('js_code_area', document.getElementById('js_code').text.trim());
+
+  loadTextFile('imageConvolute.c', function(text) {
+    putCode('ws_code_area', text.trim());
+  });
+
+  loadTextFile('imageConvolute.sh', function(text) {
+    putCode('sh_code_area', text.trim());
+  });
+
+  putCode('ws_instantiate_code_area',
+          document.getElementById('ws_instantiate_code').text.trim());
+}
+
+function loadTextFile(url, callback) {
+  var request = new XMLHttpRequest();
+  request.open('GET', url);
+  request.responseType = 'text';
+  request.onload = function (event) {
+    callback(request.response);
+  };
+  request.send();
+}
+
+function putCode(textareaId, code) {
+  var textarea = document.getElementById(textareaId);
+  textarea.value = code;
+  textarea.setAttribute('rows', code.split('\n').length);
+}
+
+function switchDisplay(div) {
+  var textareas = div.getElementsByTagName('textarea');
+  var spans = div.getElementsByTagName('span');
+  var element = textareas.length > 0 ? textareas[0] : spans[0];
+  var p = div.getElementsByTagName('p')[0];
+  p.textContent = p.textContent.slice(2);
+  if (element.style.display === 'none') {
+    element.style.display = '';
+    p.textContent = '- ' + p.textContent;
+  } else {
+    element.style.display = 'none';
+    p.textContent = '+ ' + p.textContent;
+  }
+}
+</script>
+</head>
+<body onload="init()">
+  <div>
+    <p>
+      <button id="run_button" onclick="start()" disabled>run</button>
+      <span id="message">Loading WebAssembly</span>
+    </p>
+    <p>
+      Result (average [ms])<br />
+      JavaScript: <span id="js_performance"></span><br />
+      WebAssembly: <span id="ws_performance"></span><br />
+      JavaScript/WebAssembly: <span id="comparison"></span><br />
+    </p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Images</p>
+    <span style="display:none">
+      Original<br />
+      <img id="original_image" src="../images/WebAssembly_Logo.png"><br />
+      JavaScript<br />
+      <canvas id="js_canvas"></canvas><br />
+      WebAssembly<br />
+      <canvas id="ws_canvas"></canvas><br />
+    </span>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Test code</p>
+    <p><textarea id="test_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- JavaScript code</p>
+    <p><textarea id="js_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- WebAssembly C code</p>
+    <p><textarea id="ws_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Compile shell script</p>
+    <p><textarea id="sh_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Instantiation code</p>
+    <p><textarea id="ws_instantiate_code_area" readonly style="display:none"></textarea></p>
+  </div>
+</body>
+</html>
