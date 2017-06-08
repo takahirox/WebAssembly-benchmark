@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+textarea {
+  width: 640px;
+}
+</style>
+<script src="fib.js"></script>
+<script id="js_code">
+function jsFib(n) {
+  if (n === 1) return 1;
+  if (n === 2) return 1;
+  return jsFib(n-1) + jsFib(n-2);
+}
+</script>
+<script id="ws_instantiate_code">
+var module, functions = {};
+fetch('fib.wasm')
+  .then(response => response.arrayBuffer())
+  .then(buffer => new Uint8Array(buffer))
+  .then(binary => {
+    var moduleArgs = {
+      wasmBinary: binary,
+      onRuntimeInitialized: function () {
+        functions.fib =
+          module.cwrap('fib',
+                       'number',
+                       ['number']);
+        onReady();
+      }
+    };
+    module = Module(moduleArgs);
+  });
+</script>
+<script id="test_code">
+function start() {
+  document.getElementById('run_button').disabled = true;
+
+  var num = 0x28;
+  var loop = 10;
+
+  var jsPerformance = document.getElementById('js_performance');
+  var wsPerformance = document.getElementById('ws_performance');
+  var comparison = document.getElementById('comparison');
+
+  jsPerformance.innerText = '';
+  wsPerformance.innerText = '';
+  comparison.innerText = '';
+
+  function checkFunctionality(n) {
+    return jsFib(n) === functions.fib(n);
+  }
+
+  function run(func, n, loop) {
+    func(n); // warm-up
+    var startTime = performance.now();
+    for (var i = 0; i < loop; i++) {
+      func(n);
+    }
+    var endTime = performance.now();
+    return ((endTime - startTime) / loop).toFixed(4);
+  }
+
+  // don't use Promise for the non Promise support browsers so far.
+  setTimeout(function () {
+    if (! checkFunctionality(num)) {
+      document.getElementById('message').innerText =
+       'Two functions seem not equeal';
+      document.getElementById('run_button').disabled = false;
+      return;
+    }
+    setTimeout(function () {
+      jsPerformance.innerText = run(jsFib, num, loop);
+      setTimeout(function () {
+        wsPerformance.innerText = run(functions.fib, num, loop);
+        comparison.innerText =
+          (Number(jsPerformance.innerText) /
+             Number(wsPerformance.innerText)).toFixed(4);
+        document.getElementById('message').innerText = 'Done';
+        document.getElementById('run_button').disabled = false;
+      });
+      document.getElementById('message').innerText = 'Running WebAssembly';
+    });
+    document.getElementById('message').innerText = 'Running JavaScript';
+  });
+
+  document.getElementById('message').innerText = 'Checking equality';
+}
+</script>
+<script>
+function onReady() {
+  document.getElementById('run_button').disabled = false;
+  document.getElementById('message').innerText = 'Ready';
+}
+
+function init() {
+  putCode('test_code_area', document.getElementById('test_code').text.trim());
+  putCode('js_code_area', document.getElementById('js_code').text.trim());
+
+  loadTextFile('fib.c', function(text) {
+    putCode('ws_code_area', text.trim());
+  });
+
+  loadTextFile('fib.sh', function(text) {
+    putCode('sh_code_area', text.trim());
+  });
+
+  putCode('ws_instantiate_code_area',
+          document.getElementById('ws_instantiate_code').text.trim());
+}
+
+function loadTextFile(url, callback) {
+  var request = new XMLHttpRequest();
+  request.open('GET', url);
+  request.responseType = 'text';
+  request.onload = function (event) {
+    callback(request.response);
+  };
+  request.send();
+}
+
+function putCode(textareaId, code) {
+  var textarea = document.getElementById(textareaId);
+  textarea.value = code;
+  textarea.setAttribute('rows', code.split('\n').length);
+}
+
+function switchDisplay(div) {
+  var textarea = div.getElementsByTagName('textarea')[0];
+  var p = div.getElementsByTagName('p')[0];
+  p.textContent = p.textContent.slice(2);
+  if (textarea.style.display === 'none') {
+    textarea.style.display = '';
+    p.textContent = '- ' + p.textContent;
+  } else {
+    textarea.style.display = 'none';
+    p.textContent = '+ ' + p.textContent;
+  }
+}
+</script>
+</head>
+<body onload="init()">
+  <div>
+    <p>
+      <button id="run_button" onclick="start()" disabled>run</button>
+      <span id="message">Loading WebAssembly</span>
+    </p>
+    <p>
+      Result (average [ms])<br />
+      JavaScript: <span id="js_performance"></span><br />
+      WebAssembly: <span id="ws_performance"></span><br />
+      JavaScript/WebAssembly: <span id="comparison"></span><br />
+    </p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Test code</p>
+    <p><textarea id="test_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- JavaScript code</p>
+    <p><textarea id="js_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- WebAssembly C code</p>
+    <p><textarea id="ws_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Compile shell script</p>
+    <p><textarea id="sh_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Instantiation code</p>
+    <p><textarea id="ws_instantiate_code_area" readonly style="display:none"></textarea></p>
+  </div>
+</body>
+</html>

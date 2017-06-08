@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+textarea {
+  width: 640px;
+}
+</style>
+<script src="sumInt.js"></script>
+<script id="js_code">
+function jsSumInt(array, n) {
+  var s = 0;
+  for (var i = 0; i < n; i++) {
+    s += array[i];
+  }
+  return s;
+}
+</script>
+<script id="ws_instantiate_code">
+var module, functions = {};
+fetch('sumInt.wasm')
+  .then(response => response.arrayBuffer())
+  .then(buffer => new Uint8Array(buffer))
+  .then(binary => {
+    var moduleArgs = {
+      wasmBinary: binary,
+      onRuntimeInitialized: function () {
+        functions.sumInt =
+          module.cwrap('sumInt',
+                       'number',
+                       ['number', 'number']);
+        onReady();
+      }
+    };
+    module = Module(moduleArgs);
+  });
+</script>
+<script id="test_code">
+function start() {
+  document.getElementById('run_button').disabled = true;
+
+  var num = 0x8000000;
+  var loop = 10;
+
+  var jsPerformance = document.getElementById('js_performance');
+  var wsPerformance = document.getElementById('ws_performance');
+  var comparison = document.getElementById('comparison');
+
+  jsPerformance.innerText = '';
+  wsPerformance.innerText = '';
+  comparison.innerText = '';
+
+  var array = new Int32Array(num);
+
+  initArray(array);
+
+  function initArray(array) {
+    for (var i = 0, il = array.length; i < il; i++) {
+      array[i] = ((Math.random() * 20000) | 0) - 10000;
+    }
+  }
+
+  function checkFunctionality(array, n) {
+    return jsSumInt(array, n) === wsSumInt(array, n);
+  }
+
+  function run(func, array, loop) {
+    func(array, array.length); // warm-up
+    var elapsedTime = 0.0;
+    for (var i = 0; i < loop; i++) {
+      var startTime = performance.now();
+      func(array, array.length);
+      var endTime = performance.now();
+      elapsedTime += (endTime - startTime);
+    }
+    return (elapsedTime / loop).toFixed(4);
+  }
+
+  function wsSumInt(array, n) {
+    var pointer = module._malloc(array.length * 4);
+    var offset = pointer / 4;
+    module.HEAP32.set(array, offset);
+    var result = functions.sumInt(pointer, n);
+    module._free(pointer);
+    return result;
+  }
+
+  // don't use Promise for the non Promise support browsers so far.
+  setTimeout(function () {
+    if (! checkFunctionality(array, num)) {
+      document.getElementById('message').innerText =
+       'Two functions seem not equeal';
+      document.getElementById('run_button').disabled = false;
+      return;
+    }
+    setTimeout(function () {
+      jsPerformance.innerText = run(jsSumInt, array, loop);
+      setTimeout(function () {
+        wsPerformance.innerText = run(wsSumInt, array, loop);
+        comparison.innerText =
+          (Number(jsPerformance.innerText) /
+             Number(wsPerformance.innerText)).toFixed(4);
+        document.getElementById('message').innerText = 'Done';
+        document.getElementById('run_button').disabled = false;
+      });
+      document.getElementById('message').innerText = 'Running WebAssembly';
+    });
+    document.getElementById('message').innerText = 'Running JavaScript';
+  });
+
+  document.getElementById('message').innerText = 'Checking equality';
+}
+</script>
+<script>
+function onReady() {
+  document.getElementById('run_button').disabled = false;
+  document.getElementById('message').innerText = 'Ready';
+}
+
+function init() {
+  putCode('test_code_area', document.getElementById('test_code').text.trim());
+  putCode('js_code_area', document.getElementById('js_code').text.trim());
+
+  loadTextFile('sumInt.c', function(text) {
+    putCode('ws_code_area', text.trim());
+  });
+
+  loadTextFile('sumInt.sh', function(text) {
+    putCode('sh_code_area', text.trim());
+  });
+
+  putCode('ws_instantiate_code_area',
+          document.getElementById('ws_instantiate_code').text.trim());
+}
+
+function loadTextFile(url, callback) {
+  var request = new XMLHttpRequest();
+  request.open('GET', url);
+  request.responseType = 'text';
+  request.onload = function (event) {
+    callback(request.response);
+  };
+  request.send();
+}
+
+function putCode(textareaId, code) {
+  var textarea = document.getElementById(textareaId);
+  textarea.value = code;
+  textarea.setAttribute('rows', code.split('\n').length);
+}
+
+function switchDisplay(div) {
+  var textarea = div.getElementsByTagName('textarea')[0];
+  var p = div.getElementsByTagName('p')[0];
+  p.textContent = p.textContent.slice(2);
+  if (textarea.style.display === 'none') {
+    textarea.style.display = '';
+    p.textContent = '- ' + p.textContent;
+  } else {
+    textarea.style.display = 'none';
+    p.textContent = '+ ' + p.textContent;
+  }
+}
+</script>
+</head>
+<body onload="init()">
+  <div>
+    <p>
+      <button id="run_button" onclick="start()" disabled>run</button>
+      <span id="message">Loading WebAssembly</span>
+    </p>
+    <p>
+      Result (average [ms])<br />
+      JavaScript: <span id="js_performance"></span><br />
+      WebAssembly: <span id="ws_performance"></span><br />
+      JavaScript/WebAssembly: <span id="comparison"></span><br />
+    </p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Test code</p>
+    <p><textarea id="test_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- JavaScript code</p>
+    <p><textarea id="js_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- WebAssembly C code</p>
+    <p><textarea id="ws_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Compile shell script</p>
+    <p><textarea id="sh_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Instantiation code</p>
+    <p><textarea id="ws_instantiate_code_area" readonly style="display:none"></textarea></p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+textarea {
+  width: 640px;
+}
+</style>
+<script src="quicksortInt.js"></script>
+<script id="js_code">
+function jsQuicksortInt(array, start, end) {
+  if (start >= end) return;
+  var pivot = array[end];
+  var left = 0;
+  var right = 0;
+  while (left + right < end - start) {
+    var num = array[start+left];
+    if (num < pivot) {
+      left++;
+    } else {
+      array[start+left] = array[end-right-1];
+      array[end-right-1] = pivot;
+      array[end-right] = num;
+      right++;
+    }
+  }
+  jsQuicksortInt(array, start, start+left-1);
+  jsQuicksortInt(array, start+left+1, end);
+}
+</script>
+<script id="ws_instantiate_code">
+var module, functions = {};
+fetch('quicksortInt.wasm')
+  .then(response => response.arrayBuffer())
+  .then(buffer => new Uint8Array(buffer))
+  .then(binary => {
+    var moduleArgs = {
+      wasmBinary: binary,
+      onRuntimeInitialized: function () {
+        functions.quicksortInt =
+          module.cwrap('quicksortInt',
+                       null,
+                       ['number', 'number', 'number']);
+        onReady();
+      }
+    };
+    module = Module(moduleArgs);
+  });
+</script>
+<script id="test_code">
+function start() {
+  document.getElementById('run_button').disabled = true;
+
+  var num = 0x200000;
+  var loop = 10;
+
+  var jsPerformance = document.getElementById('js_performance');
+  var wsPerformance = document.getElementById('ws_performance');
+  var comparison = document.getElementById('comparison');
+
+  jsPerformance.innerText = '';
+  wsPerformance.innerText = '';
+  comparison.innerText = '';
+
+  var array0 = new Int32Array(num); // master
+  var array1 = new Int32Array(num); // for JavaScript
+  var array2 = new Int32Array(num); // for WebAssembly
+
+  initArray(array0);
+
+  function initArray(array) {
+    for (var i = 0, il = array.length; i < il; i++) {
+      array[i] = ((Math.random() * 20000) | 0) - 10000;
+    }
+  }
+
+  function copyArray(src, res) {
+    for (var i = 0, il = src.length; i < il; i++) {
+      res[i] = src[i];
+    }
+  }
+
+  function equalArray(array1, array2) {
+    if (array1.length !== array2.length) return false;
+    for (var i = 0, il = array1.length; i < il; i++) {
+      if(array1[i] !== array2[i])
+        return false;
+    }
+    return true;
+  }
+
+  function orderIsOk(array) {
+    for (var i = 1, il = array.length; i < il; i++) {
+      if (array[i-1] > array[i])
+        return false;
+    }
+    return true;
+  }
+
+  function checkFunctionality() {
+    copyArray(array0, array1);
+    copyArray(array0, array2);
+    jsQuicksortInt(array1, 0, array1.length-1);
+    wsQuicksortInt(array2, 0, array2.length-1);
+    if (! orderIsOk(array1)) return false;
+    return equalArray(array1, array2);
+  }
+
+  function run(func, array, loop) {
+    copyArray(array0, array);
+    func(array, 0, array.length-1); // warm-up
+    var elapsedTime = 0.0;
+    for (var i = 0; i < loop; i++) {
+      copyArray(array0, array);
+      var startTime = performance.now();
+      func(array, 0, array.length-1);
+      var endTime = performance.now();
+      elapsedTime += (endTime - startTime);
+    }
+    return (elapsedTime / loop).toFixed(4);
+  }
+
+  function wsQuicksortInt(array, start, end) {
+    var pointer = module._malloc(array.length * 4);
+    var offset = pointer / 4;
+    module.HEAP32.set(array, offset);
+    functions.quicksortInt(pointer, start, end);
+    array.set(module.HEAP32.subarray(offset, offset + end + 1));
+    module._free(pointer);
+  }
+
+  // don't use Promise for the non Promise support browsers so far.
+  setTimeout(function () {
+    if (! checkFunctionality()) {
+      document.getElementById('message').innerText =
+       'Two functions seem not equeal';
+      document.getElementById('run_button').disabled = false;
+      return;
+    }
+    setTimeout(function () {
+      jsPerformance.innerText = run(jsQuicksortInt, array1, loop);
+      setTimeout(function () {
+        wsPerformance.innerText = run(wsQuicksortInt, array2, loop);
+        comparison.innerText =
+          (Number(jsPerformance.innerText) /
+             Number(wsPerformance.innerText)).toFixed(4);
+        document.getElementById('message').innerText = 'Done';
+        document.getElementById('run_button').disabled = false;
+      });
+      document.getElementById('message').innerText = 'Running WebAssembly';
+    });
+    document.getElementById('message').innerText = 'Running JavaScript';
+  });
+
+  document.getElementById('message').innerText = 'Checking equality';
+}
+</script>
+<script>
+function onReady() {
+  document.getElementById('run_button').disabled = false;
+  document.getElementById('message').innerText = 'Ready';
+}
+
+function init() {
+  putCode('test_code_area', document.getElementById('test_code').text.trim());
+  putCode('js_code_area', document.getElementById('js_code').text.trim());
+
+  loadTextFile('quicksortInt.c', function(text) {
+    putCode('ws_code_area', text.trim());
+  });
+
+  loadTextFile('quicksortInt.sh', function(text) {
+    putCode('sh_code_area', text.trim());
+  });
+
+  putCode('ws_instantiate_code_area',
+          document.getElementById('ws_instantiate_code').text.trim());
+}
+
+function loadTextFile(url, callback) {
+  var request = new XMLHttpRequest();
+  request.open('GET', url);
+  request.responseType = 'text';
+  request.onload = function (event) {
+    callback(request.response);
+  };
+  request.send();
+}
+
+function putCode(textareaId, code) {
+  var textarea = document.getElementById(textareaId);
+  textarea.value = code;
+  textarea.setAttribute('rows', code.split('\n').length);
+}
+
+function switchDisplay(div) {
+  var textarea = div.getElementsByTagName('textarea')[0];
+  var p = div.getElementsByTagName('p')[0];
+  p.textContent = p.textContent.slice(2);
+  if (textarea.style.display === 'none') {
+    textarea.style.display = '';
+    p.textContent = '- ' + p.textContent;
+  } else {
+    textarea.style.display = 'none';
+    p.textContent = '+ ' + p.textContent;
+  }
+}
+</script>
+</head>
+<body onload="init()">
+  <div>
+    <p>
+      <button id="run_button" onclick="start()" disabled>run</button>
+      <span id="message">Loading WebAssembly</span>
+    </p>
+    <p>
+      Result (average [ms])<br />
+      JavaScript: <span id="js_performance"></span><br />
+      WebAssembly: <span id="ws_performance"></span><br />
+      JavaScript/WebAssembly: <span id="comparison"></span><br />
+    </p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Test code</p>
+    <p><textarea id="test_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- JavaScript code</p>
+    <p><textarea id="js_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- WebAssembly C code</p>
+    <p><textarea id="ws_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Compile shell script</p>
+    <p><textarea id="sh_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Instantiation code</p>
+    <p><textarea id="ws_instantiate_code_area" readonly style="display:none"></textarea></p>
+  </div>
+</body>
+</html>
