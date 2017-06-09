@@ -158,7 +158,6 @@ function start() {
     var offset2 = pointer2;
     var offset3 = pointer3 / 8;
     module.HEAPU8.set(array1, offset1);
-    module.HEAPU8.set(array2, offset2);
     module.HEAPF64.set(weights, offset3);
     functions.imageConvolute(pointer1, pointer2, width, height,
                              pointer3, wWidth, wHeight);

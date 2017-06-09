@@ -99,7 +99,6 @@ function start() {
     var offset3 = pointer3 / 4;
     module.HEAP32.set(src1, offset1);
     module.HEAP32.set(src2, offset2);
-    module.HEAP32.set(res, offset3);
     var result = functions.multiplyIntVec(pointer1, pointer2, pointer3, n);
     res.set(module.HEAP32.subarray(offset3, offset3 + n));
     module._free(pointer1);
