@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+textarea {
+  width: 640px;
+}
+</style>
+<script src="collisionDetection.js"></script>
+<script id="js_code">
+function jsCollisionDetection(positions, radiuses, res, n) {
+  var count = 0;
+  for (var i = 0; i < n; i++) {
+    var p = positions[i];
+    var r = radiuses[i];
+    var collision = 0;
+    for (var j = i+1; j < n; j++) {
+      var p2 = positions[j];
+      var r2 = radiuses[j];
+      var dx = p.x - p2.x;
+      var dy = p.y - p2.y;
+      var dz = p.z - p2.z;
+      var d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      if (r > d) {
+        collision = 1;
+        count++;
+        break;
+      }
+    }
+    var index = (i / 8) | 0;
+    var pos = 7 - (i % 8);
+    if (collision === 0) {
+      res[index] &= ~(1 << pos);
+    } else {
+      res[index] |= (1 << pos);
+    }
+  }
+  return count;
+}
+</script>
+<script id="ws_instantiate_code">
+var module, functions = {};
+fetch('collisionDetection.wasm')
+  .then(response => response.arrayBuffer())
+  .then(buffer => new Uint8Array(buffer))
+  .then(binary => {
+    var moduleArgs = {
+      wasmBinary: binary,
+      onRuntimeInitialized: function () {
+        functions.collisionDetection =
+          module.cwrap('collisionDetection',
+                       'number',
+                       ['number', 'number',
+                        'number', 'number']);
+        onReady();
+      }
+    };
+    module = Module(moduleArgs);
+  });
+</script>
+<script id="test_code">
+function start() {
+  document.getElementById('run_button').disabled = true;
+
+  var elemNum = 0x4000;
+  var loop = 10;
+
+  function Position(x, y, z) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+
+  var positions = [];
+  var radiuses = new Float64Array(elemNum);
+
+  var res1 = new Uint8Array(elemNum / 8); // for JavaScript
+  var res2 = new Uint8Array(elemNum / 8); // for WebAssembly
+
+  var jsPerformance = document.getElementById('js_performance');
+  var wsPerformance = document.getElementById('ws_performance');
+  var comparison = document.getElementById('comparison');
+
+  jsPerformance.innerText = '';
+  wsPerformance.innerText = '';
+  comparison.innerText = '';
+
+  initPositions(positions, elemNum);
+  initRadiuses(radiuses);
+
+  function initPositions(array, n) {
+    for (var i = 0; i < n; i++) {
+      var x = Math.random() * 2000 - 1000;
+      var y = Math.random() * 2000 - 1000;
+      var z = Math.random() * 2000 - 1000;
+      array[i] = new Position(x, y, z);
+    }
+  }
+
+  function initRadiuses(array) {
+    for (var i = 0, il = array.length; i < il; i++) {
+      array[i] = Math.random() * 10;
+    }
+  }
+
+  function setPositionsToFloat64Array(positions, array, offset) {
+    for (var i = 0, il = positions.length; i < il; i++) {
+      var index = offset + i*3;
+      array[index+0] = positions[i].x;
+      array[index+1] = positions[i].y;
+      array[index+2] = positions[i].z;
+    }
+  }
+
+  function clearArray(array) {
+    for (var i = 0, il = array.length; i < il; i++) {
+      array[i] = 0;
+    }
+  }
+
+  function equalArray(array1, array2) {
+    if (array1.length !== array2.length)
+      return false;
+    for (var i = 0, il = array1.length; i < il; i++) {
+      if (array1[i] !== array2[i])
+        return false;
+    }
+    return true;
+  }
+
+  function checkFunctionality() {
+    clearArray(res1);
+    clearArray(res2);
+    var count1 = jsCollisionDetection(positions, radiuses, res1, elemNum);
+    var count2 = wsCollisionDetection(positions, radiuses, res2, elemNum);
+    return count1 === count2 && equalArray(res1, res2);
+  }
+
+  function run(func, positions, radiuses, res, n, loop) {
+    func(positions, radiuses, res, n);  // warm-up
+    var elapsedTime = 0.0;
+    for (var i = 0; i < loop; i++) {
+      var startTime = performance.now();
+      func(positions, radiuses, res, n);
+      var endTime = performance.now();
+      elapsedTime += (endTime - startTime);
+    }
+    return (elapsedTime / loop).toFixed(4);
+  }
+
+  function wsCollisionDetection(positions, radiuses, res, n) {
+    var pointer1 = module._malloc(positions.length * 3 * 8);
+    var pointer2 = module._malloc(radiuses.length * 8);
+    var pointer3 = module._malloc(res.length);
+    var offset1 = pointer1 / 8;
+    var offset2 = pointer2 / 8;
+    var offset3 = pointer3;
+    setPositionsToFloat64Array(positions, module.HEAPF64, offset1);
+    module.HEAPF64.set(radiuses, offset2);
+    var result = functions.collisionDetection(
+                   pointer1, pointer2, pointer3, n);
+    res.set(module.HEAPU8.subarray(offset3, offset3 + res.length));
+    module._free(pointer1);
+    module._free(pointer2);
+    module._free(pointer3);
+    return result;
+  }
+
+  // don't use Promise for the non Promise support browsers so far.
+  setTimeout(function () {
+    if (! checkFunctionality()) {
+      document.getElementById('message').innerText =
+       'Two functions seem not equeal';
+      document.getElementById('run_button').disabled = false;
+      return;
+    }
+    setTimeout(function () {
+      jsPerformance.innerText = run(jsCollisionDetection, positions,
+                                    radiuses, res1, elemNum, loop);
+      setTimeout(function () {
+        wsPerformance.innerText = run(wsCollisionDetection, positions,
+                                      radiuses, res2, elemNum, loop);
+        comparison.innerText =
+          (Number(jsPerformance.innerText) /
+             Number(wsPerformance.innerText)).toFixed(4);
+        document.getElementById('message').innerText = 'Done';
+        document.getElementById('run_button').disabled = false;
+      });
+      document.getElementById('message').innerText = 'Running WebAssembly';
+    });
+    document.getElementById('message').innerText = 'Running JavaScript';
+  });
+
+  document.getElementById('message').innerText = 'Checking equality';
+}
+</script>
+<script>
+function onReady() {
+  document.getElementById('run_button').disabled = false;
+  document.getElementById('message').innerText = 'Ready';
+}
+
+function init() {
+  putCode('test_code_area', document.getElementById('test_code').text.trim());
+  putCode('js_code_area', document.getElementById('js_code').text.trim());
+
+  loadTextFile('collisionDetection.c', function(text) {
+    putCode('ws_code_area', text.trim());
+  });
+
+  loadTextFile('collisionDetection.sh', function(text) {
+    putCode('sh_code_area', text.trim());
+  });
+
+  putCode('ws_instantiate_code_area',
+          document.getElementById('ws_instantiate_code').text.trim());
+}
+
+function loadTextFile(url, callback) {
+  var request = new XMLHttpRequest();
+  request.open('GET', url);
+  request.responseType = 'text';
+  request.onload = function (event) {
+    callback(request.response);
+  };
+  request.send();
+}
+
+function putCode(textareaId, code) {
+  var textarea = document.getElementById(textareaId);
+  textarea.value = code;
+  textarea.setAttribute('rows', code.split('\n').length);
+}
+
+function switchDisplay(div) {
+  var textareas = div.getElementsByTagName('textarea');
+  var element = textareas[0];
+  var p = div.getElementsByTagName('p')[0];
+  p.textContent = p.textContent.slice(2);
+  if (element.style.display === 'none') {
+    element.style.display = '';
+    p.textContent = '- ' + p.textContent;
+  } else {
+    element.style.display = 'none';
+    p.textContent = '+ ' + p.textContent;
+  }
+}
+</script>
+</head>
+<body onload="init()">
+  <div>
+    <p>
+      <button id="run_button" onclick="start()" disabled>run</button>
+      <span id="message">Loading WebAssembly</span>
+    </p>
+    <p>
+      Result (average [ms])<br />
+      JavaScript: <span id="js_performance"></span><br />
+      WebAssembly: <span id="ws_performance"></span><br />
+      JavaScript/WebAssembly: <span id="comparison"></span><br />
+    </p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Test code</p>
+    <p><textarea id="test_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- JavaScript code</p>
+    <p><textarea id="js_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- WebAssembly C code</p>
+    <p><textarea id="ws_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Compile shell script</p>
+    <p><textarea id="sh_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Instantiation code</p>
+    <p><textarea id="ws_instantiate_code_area" readonly style="display:none"></textarea></p>
+  </div>
+</body>
+</html>
