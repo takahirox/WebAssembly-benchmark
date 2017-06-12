@@ -135,7 +135,7 @@ function start() {
     return equalArray(array1, array2);
   }
 
-  function run(func, array, loop) {
+  function run(func, array, width, height, loop) {
     func(array0, array, width, height,
          weights, wWidth, wHeight); // warm-up
     var elapsedTime = 0.0;
