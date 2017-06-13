@@ -8,13 +8,53 @@ textarea {
 </style>
 <script src="imageThreshold.js"></script>
 <script id="js_code">
+var _work;
 function jsImageThreshold(data, width, height) {
-  for (var i = 0, il = width * height; i < il; i++) {
-    var r = data[i*4+0];
-    var g = data[i*4+1];
-    var b = data[i*4+2];
-    data[i*4+0] = data[i*4+1] = data[i*4+2] =
-      ((0.2126*r + 0.7152*g + 0.0722*b) | 0) > 128 ? 255 : 0;
+  if (_work === undefined) _work = new Int32Array(width * height);
+  var array = _work;
+  var s = 8;
+  var s2 = s / 2;
+  var t = 15;
+  var t2 = (100 - t) / 100;
+  for (var i = 0; i < width; i++) {
+    var sum = 0;
+    for (var j = 0; j < height; j++) {
+      var index = j * width + i;
+      var r = data[index * 4 + 0];
+      var g = data[index * 4 + 1];
+      var b = data[index * 4 + 2];
+      data[index * 4] = ((0.2126*r + 0.7152*g + 0.0722*b) | 0);
+      sum += data[index * 4];
+      if (i === 0) {
+        array[index] = sum;
+      } else {
+        array[index] = array[index-1] + sum;
+      }
+    }
+  }
+  for (var i = 0; i < width; i++) {
+    for (var j = 0; j < height; j++) {
+      var x1 = i - s2;
+      var x2 = i + s2;
+      var y1 = j - s2;
+      var y2 = j + s2;
+      if (x1 < 0) x1 = 0;
+      if (x2 >= width) x2 = width - 1;
+      if (y1 < 0) y1 = 0;
+      if (y2 >= height) y2 = height - 1;
+      var count = (x2 - x1) * (y2 - y1);
+      var index = j * width + i;
+      var index1 = y2 * width + x2;
+      var index2 = y1 * width + x2;
+      var index3 = y2 * width + x1;
+      var index4 = y1 * width + x1;
+      var sum = array[index1] - array[index2] - array[index3] + array[index4];
+      if (data[index * 4] * count <= sum * t2) {
+        data[index * 4 + 0] = data[index * 4 + 1] = data[index * 4 + 2] = 0;
+      } else {
+        data[index * 4 + 0] = data[index * 4 + 1] = data[index * 4 + 2] = 255;
+      }
+    }
   }
 }
 </script>
