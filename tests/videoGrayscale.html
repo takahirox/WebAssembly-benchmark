@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+textarea {
+  width: 640px;
+}
+</style>
+<script src="https://rawgit.com/mrdoob/three.js/r85/build/three.js"></script>
+<script src="imageGrayscale.js"></script>
+<script id="js_code">
+function jsImageGrayscale(data, width, height) {
+  for (var i = 0, il = width * height; i < il; i++) {
+    var r = data[i*4+0];
+    var g = data[i*4+1];
+    var b = data[i*4+2];
+    data[i*4+0] = data[i*4+1] = data[i*4+2] =
+      (0.2126*r + 0.7152*g + 0.0722*b) | 0;
+  }
+}
+</script>
+<script id="ws_instantiate_code">
+var module, functions = {};
+fetch('imageGrayscale.wasm')
+  .then(response => response.arrayBuffer())
+  .then(buffer => new Uint8Array(buffer))
+  .then(binary => {
+    var moduleArgs = {
+      wasmBinary: binary,
+      onRuntimeInitialized: function () {
+        functions.imageGrayscale =
+          module.cwrap('imageGrayscale',
+                       null,
+                       ['number', 'number', 'number']);
+        onReady();
+      }
+    };
+    module = Module(moduleArgs);
+  });
+</script>
+<script id="test_code">
+function start() {
+  document.getElementById('run_button').disabled = true;
+
+  var video = document.getElementById('original_video');
+
+  var width = video.videoWidth;
+  var height = video.videoHeight;
+  var length = width * height * 4;
+  var loop = 10;
+
+  var renderer = new THREE.WebGLRenderer({antialias: true});
+  var gl = renderer.getContext();
+  var texture = new THREE.Texture(video);
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.format = THREE.RGBAFormat;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+
+  var renderTarget = new THREE.WebGLRenderTarget(width, height);
+
+  var camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  var scene = new THREE.Scene();
+  var shader = {
+	uniforms: {
+		'tDiffuse':{ value: null}
+	},
+	vertexShader: [
+		'varying vec2 vUv;',
+		'void main() {',
+		'	vUv = uv;',
+		'	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+		'}'
+	].join('\n'),
+	fragmentShader: [
+		'uniform sampler2D tDiffuse;',
+		'varying vec2 vUv;',
+		'void main() {',
+		'	gl_FragColor = texture2D(tDiffuse, vec2(vUv.x, 1.0-vUv.y));',
+		'}'
+	].join('\n')
+  };
+  var material = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.clone(shader.uniforms),
+      vertexShader: shader.vertexShader,
+      fragmentShader: shader.fragmentShader
+  });
+  material.uniforms['tDiffuse'].value = texture;
+  var quad = new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2), material);
+  quad.frustumCulled = false; // Avoid getting clipped
+  scene.add(quad);
+
+  var jsPerformance = document.getElementById('js_performance');
+  var wsPerformance = document.getElementById('ws_performance');
+  var comparison = document.getElementById('comparison');
+
+  jsPerformance.innerText = '';
+  wsPerformance.innerText = '';
+  comparison.innerText = '';
+
+  var jsCanvas = document.getElementById('js_canvas');
+  jsCanvas.width = width;
+  jsCanvas.height = height;
+  var jsContext = jsCanvas.getContext('2d');
+
+  var wsCanvas = document.getElementById('ws_canvas');
+  wsCanvas.width = width;
+  wsCanvas.height = height;
+  var wsContext = wsCanvas.getContext('2d');
+
+  var uint8Array = new Uint8Array(module.HEAPU8.buffer);
+
+  // for Original
+  var array0 = new Uint8Array(length);
+  updateOriginalImageData();
+
+  // for JavaScript
+  var array1 = new Uint8ClampedArray(length);
+  var jsImageData = new ImageData(array1, width, height);
+
+  // for WebAssembly
+  var pointer1 = module._malloc(length);
+  var offset1 = pointer1;
+  var uint8Array = new Uint8ClampedArray(module.HEAPU8.buffer);
+  var array2 = uint8Array.subarray(offset1, offset1 + length);
+  var wsImageData = new ImageData(array2, width, height);
+
+  function updateOriginalImageData() {
+    texture.needsUpdate = true;
+    renderer.render(scene, camera, renderTarget);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, array0);
+  }
+
+  function equalArray(array1, array2) {
+    if (array1.length !== array2.length)
+      return false;
+    for (var i = 0, il = array1.length; i < il; i++) {
+      if (array1[i] !== array2[i])
+        return false;
+    }
+    return true;
+  }
+
+  function copyArray(src, res) {
+    for ( var i = 0, il = src.length; i < il; i ++ ) {
+      res[i] = src[i];
+    }
+  }
+
+  function checkFunctionality() {
+    copyArray(array0, array1);
+    copyArray(array0, array2);
+    jsImageGrayscale(array1, width, height);
+    wsImageGrayscale(array2, width, height);
+    jsContext.putImageData(jsImageData, 0, 0);
+    wsContext.putImageData(wsImageData, 0, 0);
+    return equalArray(array1, array2);
+  }
+
+  function run(func, array, width, height, loop) {
+    var elapsedTime = 0.0;
+    for (var i = 0; i < loop; i++) {
+      var startTime = performance.now();
+      func(array, width, height);
+      var endTime = performance.now();
+      elapsedTime += (endTime - startTime);
+    }
+    return elapsedTime / loop;
+  }
+
+  function wsImageGrayscale(array, width, height) {
+    functions.imageGrayscale(pointer1, width, height);
+  }
+
+  var jsElapsedTime = 0.0;
+  var wsElapsedTime = 0.0;
+  var count = 0;
+
+  function render() {
+    updateOriginalImageData();
+    copyArray(array0, array1);
+    copyArray(array0, array2);
+
+    jsElapsedTime += run(jsImageGrayscale, array1, width, height, 1);
+    wsElapsedTime += run(wsImageGrayscale, array2, width, height, 1);
+    jsContext.putImageData(jsImageData, 0, 0);
+    wsContext.putImageData(wsImageData, 0, 0);
+
+    count++;
+
+    if ( count === loop ) {
+      jsPerformance.innerText = (jsElapsedTime / loop).toFixed(4);
+      wsPerformance.innerText = (wsElapsedTime / loop).toFixed(4);
+      comparison.innerText =
+        (Number(jsPerformance.innerText) /
+           Number(wsPerformance.innerText)).toFixed(4);
+      jsElapsedTime = 0.0;
+      wsElapsedTime = 0.0;
+      count = 0;
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  // don't use Promise for the non Promise support browsers so far.
+  setTimeout(function () {
+    if (! checkFunctionality()) {
+      document.getElementById('message').innerText =
+       'Two functions seem not equal';
+      document.getElementById('run_button').disabled = false;
+      return;
+    }
+    render();
+    document.getElementById('message').innerText = 'Running';
+  });
+
+  document.getElementById('message').innerText = 'Checking equality';
+}
+</script>
+<script>
+function onReady() {
+  document.getElementById('run_button').disabled = false;
+  document.getElementById('message').innerText = 'Ready';
+}
+
+function init() {
+  putCode('test_code_area', document.getElementById('test_code').text.trim());
+  putCode('js_code_area', document.getElementById('js_code').text.trim());
+
+  loadTextFile('imageGrayscale.c', function(text) {
+    putCode('ws_code_area', text.trim());
+  });
+
+  loadTextFile('imageGrayscale.sh', function(text) {
+    putCode('sh_code_area', text.trim());
+  });
+
+  putCode('ws_instantiate_code_area',
+          document.getElementById('ws_instantiate_code').text.trim());
+}
+
+function loadTextFile(url, callback) {
+  var request = new XMLHttpRequest();
+  request.open('GET', url);
+  request.responseType = 'text';
+  request.onload = function (event) {
+    callback(request.response);
+  };
+  request.send();
+}
+
+function putCode(textareaId, code) {
+  var textarea = document.getElementById(textareaId);
+  textarea.value = code;
+  textarea.setAttribute('rows', code.split('\n').length);
+}
+
+function switchDisplay(div) {
+  var textareas = div.getElementsByTagName('textarea');
+  var spans = div.getElementsByTagName('span');
+  var element = textareas.length > 0 ? textareas[0] : spans[0];
+  var p = div.getElementsByTagName('p')[0];
+  p.textContent = p.textContent.slice(2);
+  if (element.style.display === 'none') {
+    element.style.display = '';
+    p.textContent = '- ' + p.textContent;
+  } else {
+    element.style.display = 'none';
+    p.textContent = '+ ' + p.textContent;
+  }
+}
+</script>
+</head>
+<body onload="init()">
+  <div>
+    <p>
+      <button id="run_button" onclick="start()" disabled>run</button>
+      <span id="message">Loading WebAssembly</span>
+    </p>
+    <p>
+      Result (average [ms])<br />
+      JavaScript: <span id="js_performance"></span><br />
+      WebAssembly: <span id="ws_performance"></span><br />
+      JavaScript/WebAssembly: <span id="comparison"></span><br />
+    </p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Videos</p>
+    <span style="display:none">
+      Original<br />
+      <a href="https://pixabay.com/en/videos/mountains-beautiful-landscape-winter-7418/" target="_blank">
+        <video id="original_video" loop autoplay muted src="../videos/vid.mp4" type="video/mp4"></video><br />
+      </a>
+      JavaScript<br />
+      <canvas id="js_canvas"></canvas><br />
+      WebAssembly<br />
+      <canvas id="ws_canvas"></canvas><br />
+    </span>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Test code</p>
+    <p><textarea id="test_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- JavaScript code</p>
+    <p><textarea id="js_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">- WebAssembly C code</p>
+    <p><textarea id="ws_code_area" readonly></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Compile shell script</p>
+    <p><textarea id="sh_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Instantiation code</p>
+    <p><textarea id="ws_instantiate_code_area" readonly style="display:none"></textarea></p>
+  </div>
+</body>
+</html>
