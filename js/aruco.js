@@ -1,3 +1,28 @@
+/*
+Copyright (c) 2011 Juan Mellado
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+/*
+References:
+- "ArUco: a minimal library for Augmented Reality applications based on OpenCv"
+  http://www.uco.es/investiga/grupos/ava/node/26
+*/
+
 var AR = AR || {};
 
 AR.Marker = function(id, corners){
@@ -5,7 +30,20 @@ AR.Marker = function(id, corners){
   this.corners = corners;
 };
 
+/*
+AR.Detector = function(){
+  this.grey = new CV.Image();
+  this.thres = new CV.Image();
+  this.homography = new CV.Image();
+  this.binary = [];
+  this.contours = [];
+  this.polys = [];
+  this.candidates = [];
+};
+*/
+
 AR.Detector = function(width, height){
+  // allocate memory for them when AR.Detector is instantiated by @takahirox
   this.grey = new CV.Image(width, height, new Uint8Array(width * height));
   this.thres = new CV.Image(width, height, new Uint8Array(width * height));
   this.homography = new CV.Image(width, height, new Uint8Array(width * height));

@@ -8,11 +8,11 @@ textarea {
 </style>
 <script src="https://rawgit.com/mrdoob/three.js/r85/build/three.js"></script>
 <script src="markerDetection.js"></script>
-<script src="../js/CV.js"></script>
-<script src="../js/AR.js"></script>
+<script src="../js/cv.js"></script>
+<script src="../js/aruco.js"></script>
 <script id="js_code">
-// Using CV and VR of https://github.com/jcmellado/js-aruco
-// They're edited a bit
+// Using cv.js and aruco.js of https://github.com/jcmellado/js-aruco
+// They're edited a little bit
 var _detector;
 function jsMarkerDetection(src, width, height) {
   if (_detector === undefined) _detector = new AR.Detector(width, height);

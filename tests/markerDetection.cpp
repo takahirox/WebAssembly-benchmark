@@ -1,3 +1,4 @@
+// based on cv.js and aruco.js of https://github.com/jcmellado/js-aruco
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
