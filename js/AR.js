@@ -9,7 +9,7 @@ AR.Detector = function(width, height){
   this.grey = new CV.Image(width, height, new Uint8Array(width * height));
   this.thres = new CV.Image(width, height, new Uint8Array(width * height));
   this.homography = new CV.Image(width, height, new Uint8Array(width * height));
-  this.binary = new Uint16Array((width + 2) * (height + 2));
+  this.binary = new Int16Array((width + 2) * (height + 2));
   this.contours = [];
   this.polys = [];
   this.candidates = [];
@@ -20,7 +20,6 @@ AR.Detector.prototype.detect = function(image){
   CV.adaptiveThreshold(this.grey, this.thres, 2, 7);
   
   this.contours = CV.findContours(this.thres, this.binary);
-
   this.candidates = this.findCandidates(this.contours, image.width * 0.20, 0.05, 10);
   this.candidates = this.clockwiseCorners(this.candidates);
   this.candidates = this.notTooNear(this.candidates, 10);

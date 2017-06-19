@@ -62,8 +62,8 @@ namespace CV {
   Image* gaussianBlur(Image *imageSrc, Image *imageDst, Image *imageMean, unsigned char kernelSize);
   Image* gaussianBlurFilter(Image *imageSrc, Image *imageDst, double *kernel, unsigned char kernelSize, bool horizontal);
   double* gaussianKernel(unsigned char kernelSize);
-  std::vector<std::vector<Point*>* >* findContours(Image *imageSrc, unsigned short *binary);
-  std::vector<Point*>* borderFollowing(unsigned short *src, int pos, int nbd, int pointX, int pointY, bool hole, int *deltas);
+  std::vector<std::vector<Point*>* >* findContours(Image *imageSrc, short *binary);
+  std::vector<Point*>* borderFollowing(short *src, int pos, int nbd, int pointX, int pointY, bool hole, int *deltas);
   int* neighborhoodDeltas(int width);
   std::vector<Point*>* approxPolyDP(std::vector<Point*> *contour, double epsilon);
   Image* warp(Image *imageSrc, Image *imageDst, std::vector<Point*> *contour, int warpSize);
@@ -73,7 +73,7 @@ namespace CV {
   double perimeter(std::vector<Point*> *poly);
   double minEdgeLength(std::vector<Point*> *poly);
   int countNonZero(Image *imageSrc, Square *square);
-  unsigned short* binaryBorder(Image *imageSrc, unsigned short *dst);
+  short* binaryBorder(Image *imageSrc, short *dst);
 
   Image* grayscale(Image *imageSrc, Image *imageDst){
     unsigned char *src = imageSrc->data;
@@ -398,12 +398,12 @@ namespace CV {
   }
 
   std::vector<std::vector<Point*>* >*
-  findContours(Image *imageSrc, unsigned short *binary){
+  findContours(Image *imageSrc, short *binary){
     int width = imageSrc->width;
     int height = imageSrc->height;
     std::vector<std::vector<Point*>* > *contours =
       new std::vector<std::vector<Point*>* >;
-    unsigned short *src;
+    short *src;
     int *deltas, pos, pix, nbd, i, j;
     bool outer, hole;
 
@@ -442,7 +442,7 @@ namespace CV {
     return contours;
   }
 
-  std::vector<Point*>* borderFollowing(unsigned short *src, int pos, int nbd,
+  std::vector<Point*>* borderFollowing(short *src, int pos, int nbd,
                                        int pointX, int pointY, bool hole, int *deltas){
     std::vector<Point*> *contour = new std::vector<Point*>;
     int pos1, pos3, pos4;
@@ -827,7 +827,7 @@ namespace CV {
     return nz;
   }
 
-  unsigned short* binaryBorder(Image *imageSrc, unsigned short *dst){
+  short* binaryBorder(Image *imageSrc, short *dst){
     unsigned char *src = imageSrc->data;
     int height = imageSrc->height, width = imageSrc->width,
         posSrc = 0, posDst = 0, i, j;
@@ -867,13 +867,13 @@ class ARDetector {
     CV::Image *grey;
     CV::Image *thres;
     CV::Image *homography;
-    unsigned short *binary;
+    short *binary;
 
     ARDetector(int width, int height) {
       grey = new CV::Image(width, height, new unsigned char[width * height]);
       thres = new CV::Image(width, height, new unsigned char[width * height]);
       homography = new CV::Image(width, height, new unsigned char[width * height]);
-      binary = new unsigned short[(width + 2) * (height + 2)];
+      binary = new short[(width + 2) * (height + 2)];
     }
 
     std::vector<ARMarker*>* detect(CV::Image *image) {
