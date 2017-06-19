@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+textarea {
+  width: 640px;
+}
+</style>
+<script src="https://rawgit.com/mrdoob/three.js/r85/build/three.js"></script>
+<script src="markerDetection.js"></script>
+<script src="../js/CV.js"></script>
+<script src="../js/AR.js"></script>
+<script id="js_code">
+// Using CV and VR of https://github.com/jcmellado/js-aruco
+// They're edited a bit
+var _detector;
+function jsMarkerDetection(src, width, height) {
+  if (_detector === undefined) _detector = new AR.Detector(width, height);
+  return _detector.detect(new CV.Image(width, height, src));
+}
+</script>
+<script id="ws_instantiate_code">
+var module, functions = {};
+fetch('markerDetection.wasm')
+  .then(response => response.arrayBuffer())
+  .then(buffer => new Uint8Array(buffer))
+  .then(binary => {
+    var moduleArgs = {
+      wasmBinary: binary,
+      onRuntimeInitialized: function () {
+        functions.newARDetector =
+          module.cwrap('newARDetector',
+                       'number',
+                       ['number', 'number']);
+        functions.detect =
+          module.cwrap('detect',
+                       'number',
+                       ['number', 'number', 'number', 'number']);
+        functions.freeResult =
+          module.cwrap('freeResult',
+                       null,
+                       ['number']);
+        onReady();
+      }
+    };
+    module = Module(moduleArgs);
+  });
+</script>
+<script id="test_code">
+function start() {
+  document.getElementById('run_button').disabled = true;
+
+  var video = document.getElementById('original_video');
+
+  var width = video.videoWidth;
+  var height = video.videoHeight;
+  var length = width * height * 4;
+  var loop = 10;
+
+  var renderer = new THREE.WebGLRenderer({antialias: true});
+  var gl = renderer.getContext();
+  var texture = new THREE.Texture(video);
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.format = THREE.RGBAFormat;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+
+  var renderTarget = new THREE.WebGLRenderTarget(width, height);
+
+  var camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  var scene = new THREE.Scene();
+  var shader = {
+	uniforms: {
+		'tDiffuse':{value: null}
+	},
+	vertexShader: [
+		'varying vec2 vUv;',
+		'void main() {',
+		'	vUv = uv;',
+		'	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+		'}'
+	].join('\n'),
+	fragmentShader: [
+		'uniform sampler2D tDiffuse;',
+		'varying vec2 vUv;',
+		'void main() {',
+		'	gl_FragColor = texture2D(tDiffuse, vec2(vUv.x, 1.0-vUv.y));',
+		'}'
+	].join('\n')
+  };
+  var material = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.clone(shader.uniforms),
+      vertexShader: shader.vertexShader,
+      fragmentShader: shader.fragmentShader
+  });
+  material.uniforms['tDiffuse'].value = texture;
+  var quad = new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2), material);
+  quad.frustumCulled = false; // Avoid getting clipped
+  scene.add(quad);
+
+  var jsPerformance = document.getElementById('js_performance');
+  var wsPerformance = document.getElementById('ws_performance');
+  var comparison = document.getElementById('comparison');
+
+  jsPerformance.innerText = '';
+  wsPerformance.innerText = '';
+  comparison.innerText = '';
+
+  var jsCanvas = document.getElementById('js_canvas');
+  jsCanvas.width = width;
+  jsCanvas.height = height;
+  var jsContext = jsCanvas.getContext('2d');
+
+  var wsCanvas = document.getElementById('ws_canvas');
+  wsCanvas.width = width;
+  wsCanvas.height = height;
+  var wsContext = wsCanvas.getContext('2d');
+
+  var pointer0 = functions.newARDetector(width, height);  // ARDetector
+  var pointer1 = module._malloc(length);                  // input image pixels array
+  var array = module.HEAPU8.subarray(pointer1, pointer1 + length);
+
+  updateOriginalImageData();
+
+  function updateOriginalImageData() {
+    texture.needsUpdate = true;
+    renderer.render(scene, camera, renderTarget);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, array);
+  }
+
+  function equalMarkers(markers1, markers2) {
+    if (markers1.length !== markers2.length) return false;
+    for (var i = 0, il = markers1.length; i < il; i++) {
+      var marker1 = markers1[i];
+      var marker2 = markers2[i];
+      if (marker1.id !== marker2.id) return false;
+      for (var j = 0; j < 4; j++) {
+        if (marker1.corners[j].x !== marker2.corners[j].x) return false;
+        if (marker1.corners[j].y !== marker2.corners[j].y) return false;
+      }
+    }
+    return true;
+  }
+
+  function checkFunctionality() {
+    var markers1 = jsMarkerDetection(array, width, height);
+    var markers2 = wsMarkerDetection(array, width, height);
+    renderDetection(jsContext, markers1);
+    renderDetection(wsContext, markers2);
+    return equalMarkers(markers1, markers2);
+  }
+
+  function run(func, array, width, height, loop, context) {
+    var elapsedTime = 0.0;
+    var markers;
+    for (var i = 0; i < loop; i++) {
+      var startTime = performance.now();
+      markers = func(array, width, height);
+      var endTime = performance.now();
+      elapsedTime += (endTime - startTime);
+    }
+    renderDetection(context, markers);
+    return elapsedTime / loop;
+  }
+
+  function wsMarkerDetection(array, width, height) {
+    var result = functions.detect(pointer0, pointer1, width, height);
+
+    var markers = [];
+    var pos = result / 4;
+    var data = module.HEAP32;
+    var num = data[pos++];
+    for (var i = 0; i < num; i++) {
+      markers[i] = new AR.Marker(
+        data[pos++],
+        [
+          {x: data[pos++], y: data[pos++]},
+          {x: data[pos++], y: data[pos++]},
+          {x: data[pos++], y: data[pos++]},
+          {x: data[pos++], y: data[pos++]}
+        ]
+      );
+    }
+
+    functions.freeResult(result);
+
+    return markers;
+  }
+
+  var jsElapsedTime = 0.0;
+  var wsElapsedTime = 0.0;
+  var count = 0;
+
+  function renderDetection(context, markers) {
+    context.clearRect(0, 0, width, height);
+    for (var i = 0, il = markers.length; i < il; i++) {
+      var marker = markers[i];
+      var corners = marker.corners;
+      context.beginPath();
+      context.strokeStyle = 'red';
+      context.lineWidth = 5;
+      context.moveTo(corners[0].x, corners[0].y);
+      for (var j = 1; j < 4; j++) {
+        context.lineTo(corners[j].x, corners[j].y);
+      }
+      context.lineTo(corners[0].x, corners[0].y);
+      context.closePath();
+      context.stroke();
+    }
+  }
+
+  function render() {
+    updateOriginalImageData();
+
+    jsElapsedTime += run(jsMarkerDetection, array, width, height, 1, jsContext);
+    wsElapsedTime += run(wsMarkerDetection, array, width, height, 1, wsContext);
+
+    count++;
+
+    if (count === loop) {
+      jsPerformance.innerText = (jsElapsedTime / loop).toFixed(4);
+      wsPerformance.innerText = (wsElapsedTime / loop).toFixed(4);
+      comparison.innerText =
+        (Number(jsPerformance.innerText) /
+           Number(wsPerformance.innerText)).toFixed(4);
+      jsElapsedTime = 0.0;
+      wsElapsedTime = 0.0;
+      count = 0;
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  // don't use Promise for the non Promise support browsers so far.
+  setTimeout(function () {
+    if (! checkFunctionality()) {
+      document.getElementById('message').innerText =
+       'Two functions seem not equal';
+      document.getElementById('run_button').disabled = false;
+      return;
+    }
+    render();
+    document.getElementById('message').innerText = 'Running';
+  });
+
+  document.getElementById('message').innerText = 'Checking equality';
+}
+</script>
+<script>
+function onReady() {
+  document.getElementById('run_button').disabled = false;
+  document.getElementById('message').innerText = 'Ready';
+}
+
+function init() {
+  putCode('test_code_area', document.getElementById('test_code').text.trim());
+  putCode('js_code_area', document.getElementById('js_code').text.trim());
+
+  loadTextFile('markerDetection.cpp', function(text) {
+    putCode('ws_code_area', text.trim());
+  });
+
+  loadTextFile('markerDetection.sh', function(text) {
+    putCode('sh_code_area', text.trim());
+  });
+
+  putCode('ws_instantiate_code_area',
+          document.getElementById('ws_instantiate_code').text.trim());
+}
+
+function loadTextFile(url, callback) {
+  var request = new XMLHttpRequest();
+  request.open('GET', url);
+  request.responseType = 'text';
+  request.onload = function (event) {
+    callback(request.response);
+  };
+  request.send();
+}
+
+function putCode(textareaId, code) {
+  var textarea = document.getElementById(textareaId);
+  textarea.value = code;
+  textarea.setAttribute('rows', code.split('\n').length);
+}
+
+function switchDisplay(div) {
+  var textareas = div.getElementsByTagName('textarea');
+  var spans = div.getElementsByTagName('span');
+  var element = textareas.length > 0 ? textareas[0] : spans[0];
+  var p = div.getElementsByTagName('p')[0];
+  p.textContent = p.textContent.slice(2);
+  if (element.style.display === 'none') {
+    element.style.display = '';
+    p.textContent = '- ' + p.textContent;
+  } else {
+    element.style.display = 'none';
+    p.textContent = '+ ' + p.textContent;
+  }
+}
+</script>
+</head>
+<body onload="init()">
+  <div>
+    <p>
+      <button id="run_button" onclick="start()" disabled>run</button>
+      <span id="message">Loading WebAssembly</span>
+    </p>
+    <p>
+      Result (average [ms])<br />
+      JavaScript: <span id="js_performance"></span><br />
+      WebAssembly: <span id="ws_performance"></span><br />
+      JavaScript/WebAssembly: <span id="comparison"></span><br />
+    </p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Videos</p>
+    <span style="display:none">
+      Original<br />
+      <video id="original_video" loop autoplay muted src="../videos/marker.mp4" type="video/mp4"></video><br />
+      JavaScript<br />
+      <canvas id="js_canvas"></canvas><br />
+      WebAssembly<br />
+      <canvas id="ws_canvas"></canvas><br />
+    </span>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ Test code</p>
+    <p><textarea id="test_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ JavaScript code</p>
+    <p><textarea id="js_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly C++ code</p>
+    <p><textarea id="ws_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Compile shell script</p>
+    <p><textarea id="sh_code_area" readonly style="display:none"></textarea></p>
+  </div>
+  <div>
+    <p onclick="switchDisplay(this.parentNode)">+ WebAssembly Instantiation code</p>
+    <p><textarea id="ws_instantiate_code_area" readonly style="display:none"></textarea></p>
+  </div>
+</body>
+</html>
