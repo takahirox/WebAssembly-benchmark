@@ -1,7 +1,4 @@
 // based on cv.js and aruco.js of https://github.com/jcmellado/js-aruco
-#include <stdio.h>
-#include <stddef.h>
-#include <stdlib.h>
 #include <math.h>
 #include <vector>
 #include <stack>
@@ -44,7 +41,7 @@ namespace CV {
   };
 
   #define NEIGHBORHOOD_NUM 8
-  char neighborhood[NEIGHBORHOOD_NUM][2] = {
+  const char neighborhood[NEIGHBORHOOD_NUM][2] = {
     {1, 0},
     {1, -1},
     {0, -1},
@@ -55,31 +52,32 @@ namespace CV {
     {1, 1}
   };
 
-  Image* grayscale(Image *imageSrc, Image *imageDst);
-  Image* threshold(Image *imageSrc, Image *imageDst, unsigned char threshold);
-  Image* adaptiveThreshold(Image *imageSrc, Image *imageDst, unsigned char kernelSize, short threshold);
-  int otsu(Image *imageSrc);
-  Image* stackBoxBlur(Image *imageSrc, Image *imageDst, unsigned char kernelSize);
-  Image* gaussianBlur(Image *imageSrc, Image *imageDst, Image *imageMean, unsigned char kernelSize);
-  Image* gaussianBlurFilter(Image *imageSrc, Image *imageDst, double *kernel, unsigned char kernelSize, bool horizontal);
+  Image* grayscale(const Image *imageSrc, Image *imageDst);
+  Image* threshold(const Image *imageSrc, Image *imageDst,  unsigned char threshold);
+  Image* adaptiveThreshold(const Image *imageSrc, Image *imageDst, unsigned char kernelSize, short threshold);
+  int otsu(const Image *imageSrc);
+  Image* stackBoxBlur(const Image* imageSrc, Image* imageDst,  unsigned char kernelSize);
+  Image* gaussianBlur(const Image *imageSrc, Image *imageDst, Image *imageMean, unsigned char kernelSize);
+  Image* gaussianBlurFilter(const Image *imageSrc, Image *imageDst, const double *kernel, unsigned char kernelSize, bool horizontal);
   double* gaussianKernel(unsigned char kernelSize);
-  std::vector<std::vector<Point*>* >* findContours(Image *imageSrc, short *binary);
-  std::vector<Point*>* borderFollowing(short *src, int pos, int nbd, int pointX, int pointY, bool hole, int *deltas);
+  std::vector<std::vector<Point*>* >* findContours(const Image *imageSrc, short *binary);
+  std::vector<Point*>* borderFollowing(short *src, int pos, int nbd, int pointX, int pointY, bool hole, const int *deltas);
   int* neighborhoodDeltas(int width);
-  std::vector<Point*>* approxPolyDP(std::vector<Point*> *contour, double epsilon);
-  Image* warp(Image *imageSrc, Image *imageDst, std::vector<Point*> *contour, int warpSize);
-  double* getPerspectiveTransform(std::vector<Point *> *src, int size);
-  double* square2quad(std::vector<Point*> *src);
-  bool isContourConvex(std::vector<Point*> *contour);
-  double perimeter(std::vector<Point*> *poly);
-  double minEdgeLength(std::vector<Point*> *poly);
-  int countNonZero(Image *imageSrc, Square *square);
-  short* binaryBorder(Image *imageSrc, short *dst);
+  std::vector<Point*>* approxPolyDP(const std::vector<Point*> *contour, double epsilon);
+  Image* warp(const Image *imageSrc, Image *imageDst, const std::vector<Point*> *contour, int warpSize);
+  double* getPerspectiveTransform(const std::vector<Point *> *src, int size);
+  double* square2quad(const std::vector<Point*> *src);
+  bool isContourConvex(const std::vector<Point*> *contour);
+  double perimeter(const std::vector<Point*> *poly);
+  double minEdgeLength(const std::vector<Point*> *poly);
+  int countNonZero(const Image *imageSrc, const Square *square);
+  short* binaryBorder(const Image *imageSrc, short *dst);
 
   Image* grayscale(const Image *imageSrc, Image *imageDst){
-    const unsigned char *src = imageSrc->data;
-    unsigned char *dst = imageDst->data;
-    int len = imageSrc->length * 4, j = 0;
+    const unsigned char* src = imageSrc->data;
+    unsigned char* dst = imageDst->data;
+    const int len = imageSrc->length * 4;
+    int j = 0;
 
     for (int i = 0; i < len; i += 4){
       dst[j ++] = (unsigned char)
@@ -92,9 +90,9 @@ namespace CV {
     return imageDst;
   }
 
-  Image* threshold(const Image *imageSrc, Image *imageDst, unsigned char threshold){
-    const unsigned char *src = imageSrc->data;
-    unsigned char *dst = imageDst->data;
+  Image* threshold(const Image *imageSrc, Image *imageDst, const unsigned char threshold){
+    const unsigned char* src = imageSrc->data;
+    unsigned char* dst = imageDst->data;
     const int len = imageSrc->length;
     unsigned char tab[256];
 
@@ -112,18 +110,19 @@ namespace CV {
     return imageDst;
   }
 
-  Image* adaptiveThreshold(Image *imageSrc, Image *imageDst,
+  Image* adaptiveThreshold(const Image* imageSrc, Image *imageDst,
                            unsigned char kernelSize,
                            short threshold){
-    unsigned char *src = imageSrc->data;
-    unsigned char *dst = imageDst->data;
-    int len = imageSrc->length, i;
+    const unsigned char* src = imageSrc->data;
+    unsigned char* dst = imageDst->data;
+    const int len = imageSrc->length;
+    int i;
     unsigned char tab[768];
 
     stackBoxBlur(imageSrc, imageDst, kernelSize);
 
     for (i = 0; i < 768; ++ i){
-      tab[i] = (i - 255 <= -threshold)? 255: 0;
+      tab[i] = (i - 255 <= -threshold) ? 255 : 0;
     }
 
     for (i = 0; i < len; ++ i){
@@ -136,9 +135,9 @@ namespace CV {
     return imageDst;  
   }
 
-  int otsu(Image *imageSrc){
-    unsigned char *src = imageSrc->data;
-    int len = imageSrc->length;
+  int otsu(const Image *imageSrc){
+    const unsigned char *src = imageSrc->data;
+    const int len = imageSrc->length;
     int threshold = 0, sum = 0, sumB = 0, wB = 0, wF = 0, i;
     double mu, max, between;
 
@@ -182,29 +181,32 @@ namespace CV {
     return threshold;
   }
 
-  int stackBoxBlurMult[] =
+  const int stackBoxBlurMult[] =
     {1, 171, 205, 293, 57, 373, 79, 137, 241, 27, 391, 357, 41, 19, 283, 265};
 
-  int stackBoxBlurShift[] =
+  const int stackBoxBlurShift[] =
     {0, 9, 10, 11, 9, 12, 10, 11, 12, 9, 13, 13, 10, 9, 13, 13};
 
   class BlurStack {
     public:
       unsigned char color;
-      BlurStack *next;
+      BlurStack* next;
       BlurStack(): color(0), next(NULL) {}
   };
 
-  Image* stackBoxBlur(Image *imageSrc, Image *imageDst,
-                      unsigned char kernelSize){
-    unsigned char *src = imageSrc->data;
-    unsigned char *dst = imageDst->data;
-    int height = imageSrc->height, width = imageSrc->width,
-        heightMinus1 = height - 1, widthMinus1 = width - 1,
-        size = kernelSize + kernelSize + 1, radius = kernelSize + 1,
-        mult = stackBoxBlurMult[kernelSize],
-        shift = stackBoxBlurShift[kernelSize],
-        sum, pos, start, p, x, y, i;
+  Image* stackBoxBlur(const Image* imageSrc, Image* imageDst,
+                      const unsigned char kernelSize){
+    const unsigned char* src = imageSrc->data;
+    unsigned char* dst = imageDst->data;
+    const int height = imageSrc->height;
+    const int width = imageSrc->width;
+    const int heightMinus1 = height - 1;
+    const int widthMinus1 = width - 1;
+    const int size = kernelSize + kernelSize + 1;
+    const int radius = kernelSize + 1;
+    const int mult = stackBoxBlurMult[kernelSize];
+    const int shift = stackBoxBlurShift[kernelSize];
+    int sum, pos, start, p, x, y, i;
     unsigned char color;
     BlurStack *stack, *stackStart;
 
@@ -238,7 +240,7 @@ namespace CV {
         dst[pos ++] = (sum * mult) >> shift;
       
         p = x + radius;
-        p = start + (p < widthMinus1? p: widthMinus1);
+        p = start + (p < widthMinus1 ? p : widthMinus1);
         sum -= stack->color - src[p];
       
         stack->color = src[p];
@@ -271,7 +273,7 @@ namespace CV {
         dst[pos] = (sum * mult) >> shift;
       
         p = y + radius;
-        p = x + ( (p < heightMinus1? p: heightMinus1) * width );
+        p = x + ( (p < heightMinus1 ? p : heightMinus1) * width );
         sum -= stack->color - dst[p];
       
         stack->color = dst[p];
@@ -291,7 +293,7 @@ namespace CV {
     return imageDst;
   };
 
-  Image* gaussianBlur(Image *imageSrc, Image *imageDst, Image *imageMean,
+  Image* gaussianBlur(const Image *imageSrc, Image *imageDst, Image *imageMean,
                       unsigned char kernelSize){
     double *kernel = gaussianKernel(kernelSize);
 
@@ -309,13 +311,14 @@ namespace CV {
     return imageDst;
   }
 
-  Image* gaussianBlurFilter(Image *imageSrc, Image *imageDst, double *kernel,
-                            unsigned char kernelSize, bool horizontal){
-    unsigned char *src = imageSrc->data;
+  Image* gaussianBlurFilter(const Image* imageSrc, Image *imageDst, const double *kernel,
+                            const unsigned char kernelSize, const bool horizontal){
+    const unsigned char* src = imageSrc->data;
     unsigned char *dst = imageDst->data;
-    int height = imageSrc->height, width = imageSrc->width,
-        pos = 0, limit = kernelSize >> 1,
-        cur, i, j, k;
+    const int height = imageSrc->height;
+    const int width = imageSrc->width;
+    const int limit = kernelSize >> 1;
+    int pos = 0, cur, i, j, k;
     double value;
       
     for (i = 0; i < height; ++ i){
@@ -353,10 +356,10 @@ namespace CV {
     return imageDst;
   }
 
-  double* gaussianKernel(unsigned char kernelSize){
+  double* gaussianKernel(const unsigned char kernelSize){
     double sigma, scale2X, sum;
     int center, i, x;
-    double *kernel = new double[kernelSize];
+    auto* kernel = new double[kernelSize];
 
     if ( (kernelSize <= 7) && (kernelSize % 2 == 1) ){
       if (kernelSize == 1) {
@@ -398,25 +401,20 @@ namespace CV {
     return kernel;
   }
 
-  std::vector<std::vector<Point*>* >*
-  findContours(Image *imageSrc, short *binary){
-    int width = imageSrc->width;
-    int height = imageSrc->height;
-    std::vector<std::vector<Point*>* > *contours =
-      new std::vector<std::vector<Point*>* >;
-    short *src;
-    int *deltas, pos, pix, nbd, i, j;
+  std::vector<std::vector<Point*>*>* findContours(const Image* imageSrc,  short* binary){
+    const int width = imageSrc->width;
+    const int height = imageSrc->height;
+    auto* contours = new std::vector<std::vector<Point*>* >;
+    short* src = binaryBorder(imageSrc, binary);
+    int pos, pix, nbd, i, j;
     bool outer, hole;
 
-    src = binaryBorder(imageSrc, binary);
-
-    deltas = neighborhoodDeltas(width + 2);
+    const int* deltas = neighborhoodDeltas(width + 2);
 
     pos = width + 3;
     nbd = 1;
 
     for (i = 0; i < height; ++ i, pos += 2){
-  
       for (j = 0; j < width; ++ j, ++ pos){
         pix = src[pos];
 
@@ -444,13 +442,13 @@ namespace CV {
   }
 
   std::vector<Point*>* borderFollowing(short *src, int pos, int nbd,
-                                       int pointX, int pointY, bool hole, int *deltas){
-    std::vector<Point*> *contour = new std::vector<Point*>;
+                                       int pointX, int pointY, bool hole, const int *deltas){
+    auto* contour = new std::vector<Point*>;
     int pos1, pos3, pos4;
-    unsigned int s, s_end, s_prev;
+    unsigned int s, s_end;
     Point point(pointX, pointY);
 
-    s = s_end = hole? 0: 4;
+    s = s_end = hole ? 0: 4;
     do{
       s = (s - 1) & 7;
       pos1 = pos + deltas[s];
@@ -465,7 +463,6 @@ namespace CV {
 
     }else{
       pos3 = pos;
-      s_prev = s ^ 4;
 
       while(true){
         s_end = s;
@@ -485,8 +482,6 @@ namespace CV {
 
         contour->push_back( new Point(point.x, point.y) );
 
-        s_prev = s;
-
         point.x += neighborhood[s][0];
         point.y += neighborhood[s][1];
 
@@ -502,8 +497,9 @@ namespace CV {
     return contour;
   }
 
-  int* neighborhoodDeltas(int width){
-    int len = NEIGHBORHOOD_NUM, i = 0;
+  int* neighborhoodDeltas(const int width){
+    const int len = NEIGHBORHOOD_NUM;
+    int i = 0;
     int *deltas = new int[NEIGHBORHOOD_NUM*2];
 
     for (; i < len; ++ i){
@@ -517,14 +513,14 @@ namespace CV {
     return deltas;
   }
 
-  std::vector<Point*>* approxPolyDP(std::vector<Point*> *contour,
+  std::vector<Point*>* approxPolyDP(const std::vector<Point*> *contour,
                                     double epsilon){
     Slice slice(0, 0);
     Slice right_slice(0, 0);
     std::stack<Slice> stack;
-    std::vector<Point*> *poly = new std::vector<Point*>;
-    int len = contour->size(), dist, max_dist,
-        dx, dy, i, j, k;
+    auto* poly = new std::vector<Point*>;
+    const int len = contour->size();
+    int dist, max_dist, dx, dy, i, j, k;
     Point *pt, *start_pt, *end_pt;
     bool le_eps;
 
@@ -623,13 +619,13 @@ namespace CV {
     return poly;
   }
 
-  Image* warp(Image *imageSrc, Image *imageDst, std::vector<Point*> *contour,
-              int warpSize){
-    unsigned char *src = imageSrc->data;
+  Image* warp(const Image *imageSrc, Image *imageDst, const std::vector<Point*> *contour,
+              const int warpSize){
+    const unsigned char* src = imageSrc->data;
     unsigned char *dst = imageDst->data;
-    int width = imageSrc->width, height = imageSrc->height,
-        pos = 0,
-        sx1, sx2, dx1, dx2, sy1, sy2, dy1, dy2, p1, p2, p3, p4, i, j;
+    const int width = imageSrc->width;
+    const int height = imageSrc->height;
+    int pos = 0, sx1, sx2, dx1, dx2, sy1, sy2, dy1, dy2, p1, p2, p3, p4, i, j;
     double r, s, t, u, v, w, x, y;
   
     double *m = getPerspectiveTransform(contour, warpSize - 1);
@@ -683,7 +679,7 @@ namespace CV {
     return imageDst;
   }
 
-  double* getPerspectiveTransform(std::vector<Point *> *src, int size){
+  double* getPerspectiveTransform(const std::vector<Point *> *src, int size){
     double *rq = square2quad(src);
   
     rq[0] /= size;
@@ -696,8 +692,8 @@ namespace CV {
     return rq;
   }
 
-  double* square2quad(std::vector<Point*> *src){
-    double *sq = new double[9];
+  double* square2quad(const std::vector<Point*> *src){
+    auto* sq = new double[9];
     int px, py, dx1, dx2, dy1, dy2, den;
   
     px = (*src)[0]->x - (*src)[1]->x + (*src)[2]->x - (*src)[3]->x;
@@ -735,10 +731,10 @@ namespace CV {
     return sq;
   }
 
-  bool isContourConvex(std::vector<Point *> *contour){
-    int orientation = 0,
-        len = contour->size(), i = 0, j = 0,
-        dxdy0, dydx0, dx0, dy0, dx, dy;
+  bool isContourConvex(const std::vector<Point *> *contour){
+    int orientation = 0;
+    const int len = contour->size();
+    int i = 0, j = 0, dxdy0, dydx0, dx0, dy0, dx, dy;
     Point *cur_pt, *prev_pt;
     bool convex = true;
 
@@ -759,7 +755,7 @@ namespace CV {
       dxdy0 = dx * dy0;
       dydx0 = dy * dx0;
 
-      orientation |= dydx0 > dxdy0? 1: (dydx0 < dxdy0? 2: 3);
+      orientation |= dydx0 > dxdy0 ? 1 : (dydx0 < dxdy0 ? 2 : 3);
 
       if (3 == orientation){
           convex = false;
@@ -773,9 +769,9 @@ namespace CV {
     return convex;
   }
 
-  double perimeter(std::vector<Point*> *poly){
-    int len = poly->size(), i = 0, j = len - 1,
-        dx, dy;
+  double perimeter(const std::vector<Point*>* poly){
+    const int len = poly->size();
+    int i = 0, j = len - 1, dx, dy;
     double p = 0.0;
 
     for (; i < len; j = i ++){
@@ -788,9 +784,9 @@ namespace CV {
     return p;
   }
 
-  double minEdgeLength(std::vector<Point*> *poly){
-    int len = poly->size(), i = 0, j = len - 1, 
-        min = 0x7FFFFFFF, d, dx, dy;
+  double minEdgeLength(const std::vector<Point*>* poly){
+    const int len = poly->size();
+    int i = 0, j = len - 1, min = 0x7FFFFFFF, d, dx, dy;
 
     for (; i < len; j = i ++){
       dx = (*poly)[i]->x - (*poly)[j]->x;
@@ -806,19 +802,18 @@ namespace CV {
     return sqrt(min);
   }
 
-  int countNonZero(Image *imageSrc, Square *square){
-    unsigned char *src = imageSrc->data;
-    int height = square->height, width = square->width,
-        pos = square->x + (square->y * imageSrc->width),
-        span = imageSrc->width - width,
-        nz = 0, i, j;
+  int countNonZero(const Image* imageSrc, const Square* square){
+    const unsigned char* src = imageSrc->data;
+    const int height = square->height;
+    const int width = square->width;
+    int pos = square->x + (square->y * imageSrc->width);
+    const int span = imageSrc->width - width;
+    int nz = 0, i, j;
   
-    for (i = 0; i < height; ++ i){
-
-      for (j = 0; j < width; ++ j){
-    
-        if ( 0 != src[pos ++] ){
-          ++ nz;
+    for (i = 0; i < height; ++i) {
+      for (j = 0; j < width; ++j) {
+        if ( 0 != src[pos++] ){
+          ++nz;
         }
       }
     
@@ -828,10 +823,11 @@ namespace CV {
     return nz;
   }
 
-  short* binaryBorder(Image *imageSrc, short *dst){
-    unsigned char *src = imageSrc->data;
-    int height = imageSrc->height, width = imageSrc->width,
-        posSrc = 0, posDst = 0, i, j;
+  short* binaryBorder(const Image* imageSrc, short* dst){
+    const unsigned char* src = imageSrc->data;
+    const int height = imageSrc->height;
+    const int width = imageSrc->width;
+    int posSrc = 0, posDst = 0, i, j;
 
     for (j = -2; j < width; ++ j){
       dst[posDst ++] = 0;
@@ -904,15 +900,14 @@ class ARDetector {
         Pair(int _first, int _second): first(_first), second(_second) {}
     };
 
-    void freeResources(
+    static void freeResources(
       std::vector<std::vector<CV::Point*>* > *contours,
       std::vector<std::vector<CV::Point*>* > *candidates,
       std::vector<std::vector<CV::Point*>* > *candidates2
     ) {
-      for (int i = 0, il = contours->size(); i < il; i++) {
-        std::vector<CV::Point*> *points = (*contours)[i];
-        for (int j = 0, jl = points->size(); j < jl; j++) {
-          delete (*points)[j];
+      for (auto points : *contours) {
+        for (auto point : *points) {
+          delete point;
         }
         points->clear();
         std::vector<CV::Point*>().swap(*points);
@@ -921,14 +916,13 @@ class ARDetector {
       contours->clear();
       std::vector<std::vector<CV::Point*>* >().swap(*contours);
       delete contours;
-
-      for (int i = 0, il = candidates->size(); i < il; i++) {
-        std::vector<CV::Point*> *points = (*candidates)[i];
-        for (int j = 0, jl = points->size(); j < jl; j++) {
-          delete (*points)[j];
+      for (auto points : *candidates) {
+        for (auto point : *points) {
+          delete point;
         }
         points->clear();
         std::vector<CV::Point*>().swap(*points);
+
         delete points;
       }
       candidates->clear();
@@ -941,17 +935,12 @@ class ARDetector {
 
     }
 
-    std::vector<std::vector<CV::Point*>* >*
-    findCandidates(std::vector<std::vector<CV::Point*>* > *contours,
-                   double minSize, double epsilon, double minLength){
-      std::vector<std::vector<CV::Point*>* > *candidates =
-        new std::vector<std::vector<CV::Point*>* >;
-      int len = contours->size(), i;
-      std::vector<CV::Point*> *contour, *poly;
-
-      for (i = 0; i < len; ++ i){
-        contour = (*contours)[i];
-
+    static std::vector<std::vector<CV::Point*>* >*
+    findCandidates(const std::vector<std::vector<CV::Point*>* > *contours,
+                   const double minSize, const double epsilon, const double minLength){
+      auto* candidates = new std::vector<std::vector<CV::Point*>* >;
+      std::vector<CV::Point*> *poly;
+      for (auto contour : *contours) {
         if ((double)contour->size() >= minSize){
           poly = CV::approxPolyDP(contour, contour->size() * epsilon);
           bool added = false;
@@ -965,8 +954,8 @@ class ARDetector {
           }
 
           if (! added) {
-            for (int j = 0, jl = poly->size(); j < jl; j++) {
-              delete (*poly)[j];
+            for (auto p : *poly) {
+              delete p;
             }
             poly->clear();
             std::vector<CV::Point*>().swap(*poly);
@@ -978,13 +967,11 @@ class ARDetector {
       return candidates;
     }
 
-    std::vector<std::vector<CV::Point*>* >*
+    static std::vector<std::vector<CV::Point*>* >*
     clockwiseCorners(std::vector<std::vector<CV::Point*>* > *candidates){
-      int len = candidates->size(), dx1, dx2, dy1, dy2, i;
+      int dx1, dx2, dy1, dy2;
       CV::Point *swap;
-
-      for (i = 0; i < len; ++ i){
-        std::vector<CV::Point*> *candidate = (*candidates)[i];
+      for (auto candidate : *candidates) {
         dx1 = (*candidate)[1]->x - (*candidate)[0]->x;
         dy1 = (*candidate)[1]->y - (*candidate)[0]->y;
         dx2 = (*candidate)[2]->x - (*candidate)[0]->x;
@@ -994,19 +981,18 @@ class ARDetector {
           swap = (*candidate)[1];
           (*candidate)[1] = (*candidate)[3];
           (*candidate)[3] = swap;
-
         }
       }
 
       return candidates;
     }
 
-    std::vector<std::vector<CV::Point*>* >*
-    getNotTooNear(std::vector<std::vector<CV::Point*>* > *candidates, double minDist){
-      std::vector<std::vector<CV::Point*>* > *notTooNear =
-        new std::vector<std::vector<CV::Point*>* >;
+    static std::vector<std::vector<CV::Point*>* >*
+    getNotTooNear(const std::vector<std::vector<CV::Point*>* > *candidates, const double minDist){
+      auto* notTooNear = new std::vector<std::vector<CV::Point*>* >;
       bool tooNears[candidates->size()];
-      int len = candidates->size(), dist, dx, dy, i, j, k;
+      const int len = candidates->size();
+      int dist, dx, dy, i, j, k;
 
       for (i = 0; i < len; ++ i){
         tooNears[i] = false;
@@ -1047,17 +1033,14 @@ class ARDetector {
     }
 
     std::vector<ARMarker*>* findMarkers(
-        CV::Image* imageSrc,
-        std::vector<std::vector<CV::Point*>* > *candidates,
-        int warpSize){
-      int len = candidates->size(), i;
-      std::vector<CV::Point*> *candidate;
-      std::vector<ARMarker*> *markers = new std::vector<ARMarker*>;
+        const CV::Image* imageSrc,
+        const std::vector<std::vector<CV::Point*>* > *candidates,
+        const int warpSize) {
+      const int len = candidates->size();
+      auto* markers = new std::vector<ARMarker*>;
       ARMarker *marker;
 
-      for (i = 0; i < len; ++ i){
-        candidate = (*candidates)[i];
-
+      for (auto candidate : *candidates) {
         CV::warp(imageSrc, homography, candidate, warpSize);
   
         CV::threshold(homography, homography, CV::otsu(homography) );
@@ -1071,10 +1054,11 @@ class ARDetector {
       return markers;
     }
 
-    ARMarker* getMarker(CV::Image* imageSrc,
-                        std::vector<CV::Point*> *candidate){
-      int width = (int)(imageSrc->width / 7),
-          minZero = (width * width) >> 1, inc, i, j, k;
+    ARMarker* getMarker(const CV::Image* imageSrc,
+                        const std::vector<CV::Point*> *candidate) {
+      const int width = (int)(imageSrc->width / 7);
+      const int minZero = (width * width) >> 1;
+      int inc, i, j, k;
 
       for (i = 0; i < 7; ++ i){
         inc = (0 == i || 6 == i)? 1: 6;
@@ -1082,12 +1066,12 @@ class ARDetector {
         for (j = 0; j < 7; j += inc){
           CV::Square square(j * width, i * width, width, width);
           if ( CV::countNonZero(imageSrc, &square) > minZero){
-            return NULL;
+            return nullptr;
           }
         }
       }
 
-      unsigned char **bits = new unsigned char*[5];
+      auto **bits = new unsigned char*[5];
       for (i = 0; i < 5; i++) {
         bits[i] = new unsigned char[5];
       }
@@ -1118,7 +1102,7 @@ class ARDetector {
         }
       }
 
-      ARMarker *marker = NULL;
+      ARMarker *marker = nullptr;
 
       if (0 == pair.first){
         marker = new ARMarker(
@@ -1136,23 +1120,23 @@ class ARDetector {
       return marker;
     }
 
-    int hammingDistance(unsigned char **bits){
-      unsigned char ids[4][5] = {
+    static int hammingDistance(unsigned char **bits){
+      const unsigned char ids[4][5] = {
         {1,0,0,0,0},
         {1,0,1,1,1},
         {0,1,0,0,1},
         {0,1,1,1,0}
       };
-      int dist = 0, sum, minSum, i, j, k;
+      int dist = 0, sum, minSum;
 
-      for (i = 0; i < 5; ++ i){
+      for (int i = 0; i < 5; ++ i){
         minSum = 0x7FFFFFFF;
     
-        for (j = 0; j < 4; ++ j){
+        for (int j = 0; j < 4; ++ j){
           sum = 0;
 
-          for (k = 0; k < 5; ++ k){
-              sum += bits[i][k] == ids[j][k]? 0: 1;
+          for (int k = 0; k < 5; ++ k){
+              sum += bits[i][k] == ids[j][k] ? 0: 1;
           }
 
           if (sum < minSum){
@@ -1166,11 +1150,10 @@ class ARDetector {
       return dist;
     }
 
-    unsigned int mat2id(unsigned char **bits){
+    static unsigned int mat2id(unsigned char **bits){
       unsigned int id = 0;
-      int i;
 
-      for (i = 0; i < 5; ++ i){
+      for (int i = 0; i < 5; ++ i){
         id <<= 1;
         id |= bits[i][1];
         id <<= 1;
@@ -1180,14 +1163,13 @@ class ARDetector {
       return id;
     }
 
-    unsigned char** rotate(unsigned char **src){
-      int len = 5;
-      unsigned char **dst = new unsigned char*[len];
-      int i, j;
+    static unsigned char** rotate(unsigned char **src) {
+      const int len = 5;
+      auto **dst = new unsigned char*[len];
   
-      for (i = 0; i < len; ++ i){
+      for (int i = 0; i < len; ++ i){
         dst[i] = new unsigned char[len];
-        for (j = 0; j < len; ++ j){
+        for (int j = 0; j < len; ++ j){
           dst[i][j] = src[len - j - 1][i];
         }
       }
@@ -1195,11 +1177,11 @@ class ARDetector {
       return dst;
     }
 
-    std::vector<CV::Point*>* rotate2(std::vector<CV::Point*> *src,
-                                     int rotation){
-      std::vector<CV::Point*> *dst = new std::vector<CV::Point*>;
-      int len = src->size(), i;
-      for (i = 0; i < len; ++ i){
+    static std::vector<CV::Point*>* rotate2(const std::vector<CV::Point*> *src,
+                                     const int rotation){
+      auto* dst = new std::vector<CV::Point*>;
+      const int len = src->size();
+      for (int i = 0; i < len; ++ i){
         CV::Point *point = (*src)[ (rotation + i) % len ];
         dst->push_back(new CV::Point(point->x, point->y));
       }
@@ -1214,11 +1196,10 @@ extern "C" {
   }
 
   void freeMarkers(std::vector<ARMarker*>* markers) {
-    for (int i = 0, il = markers->size(); i < il; i++) {
-      ARMarker* marker = (*markers)[i];
+    for (auto marker : *markers) {
       std::vector<CV::Point*>* points = marker->corners;
-      for (int j = 0, jl = marker->corners->size(); j < jl; j++) {
-        delete (*points)[j];
+      for (auto point : *marker->corners) {
+        delete point;
       }
       points->clear();
       std::vector<CV::Point*>().swap(*points);
@@ -1230,15 +1211,14 @@ extern "C" {
     delete markers;
   }
 
-  int* detect(ARDetector* detector, unsigned char *src, int width, int height) {
-    CV::Image *image = new CV::Image(width, height, src);
+  int* detect(ARDetector* detector, unsigned char* src, const int width, const int height) {
+    auto* image = new CV::Image(width, height, src);
     std::vector<ARMarker*> *markers = detector->detect(image);
 
     int *result = new int[1 + markers->size() * 9];
     int pos = 0;
     result[pos++] = markers->size();
-    for (int i = 0, il = markers->size(); i < il; i++) {
-      ARMarker *marker = (*markers)[i];
+    for (auto marker : *markers) {
       result[pos++] = marker->id;
 
       std::vector<CV::Point *> *points = marker->corners;
@@ -1254,7 +1234,7 @@ extern "C" {
     return result;
   }
 
-  void freeResult(int *result) {
+  void freeResult(const int *result) {
     delete[] result;
   }
 }
