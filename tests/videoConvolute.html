@@ -131,10 +131,12 @@ function start() {
   var jsPerformance = document.getElementById('js_performance');
   var wsPerformance = document.getElementById('ws_performance');
   var comparison = document.getElementById('comparison');
+  var avgRatios = document.getElementById('avg_ratios');
 
   jsPerformance.innerText = '';
   wsPerformance.innerText = '';
   comparison.innerText = '';
+  avgRatios.innerText = '';
 
   var jsCanvas = document.getElementById('js_canvas');
   jsCanvas.width = width;
@@ -215,6 +217,9 @@ function start() {
   var jsElapsedTime = 0.0;
   var wsElapsedTime = 0.0;
   var count = 0;
+  var performanceRatios = [];
+  var maxPerformanceRatios = 100;
+  var minPerformanceRatiosForReporting = 10;
 
   function render() {
     updateOriginalImageData();
@@ -227,11 +232,22 @@ function start() {
     count++;
 
     if ( count === loop ) {
+      var computeRatio = (jsElapsedTime / loop).toFixed(4) / (wsElapsedTime / loop).toFixed(4);
+      if (performanceRatios.length < maxPerformanceRatios) {
+        performanceRatios.push(computeRatio);
+      }
       jsPerformance.innerText = (jsElapsedTime / loop).toFixed(4);
       wsPerformance.innerText = (wsElapsedTime / loop).toFixed(4);
       comparison.innerText =
         (Number(jsPerformance.innerText) /
            Number(wsPerformance.innerText)).toFixed(4);
+      if (performanceRatios.length > minPerformanceRatiosForReporting) {
+        var sum = 0;
+        for (var i = 0; i < performanceRatios.length; ++i) {
+          sum += performanceRatios[i];
+        }
+        avgRatios.innerText = Number(sum / performanceRatios.length).toFixed(4);
+      }
       jsElapsedTime = 0.0;
       wsElapsedTime = 0.0;
       count = 0;
@@ -320,6 +336,7 @@ function switchDisplay(div) {
       JavaScript: <span id="js_performance"></span><br />
       WebAssembly: <span id="ws_performance"></span><br />
       JavaScript/WebAssembly: <span id="comparison"></span><br />
+      JavaScript/WebAssembly Running Average (min-10, max-100 samples): <span id="avg_ratios"></span><br />
     </p>
   </div>
   <div>
