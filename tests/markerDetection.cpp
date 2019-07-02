@@ -76,12 +76,12 @@ namespace CV {
   int countNonZero(Image *imageSrc, Square *square);
   short* binaryBorder(Image *imageSrc, short *dst);
 
-  Image* grayscale(Image *imageSrc, Image *imageDst){
-    unsigned char *src = imageSrc->data;
+  Image* grayscale(const Image *imageSrc, Image *imageDst){
+    const unsigned char *src = imageSrc->data;
     unsigned char *dst = imageDst->data;
-    int len = imageSrc->length * 4, i = 0, j = 0;
+    int len = imageSrc->length * 4, j = 0;
 
-    for (; i < len; i += 4){
+    for (int i = 0; i < len; i += 4){
       dst[j ++] = (unsigned char)
         (src[i] * 0.299 + src[i + 1] * 0.587 + src[i + 2] * 0.114 + 0.5);
     }
@@ -92,17 +92,17 @@ namespace CV {
     return imageDst;
   }
 
-  Image* threshold(Image *imageSrc, Image *imageDst, unsigned char threshold){
-    unsigned char *src = imageSrc->data;
+  Image* threshold(const Image *imageSrc, Image *imageDst, unsigned char threshold){
+    const unsigned char *src = imageSrc->data;
     unsigned char *dst = imageDst->data;
-    int len = imageSrc->length, i;
+    const int len = imageSrc->length;
     unsigned char tab[256];
 
-    for (i = 0; i < 256; ++ i){
-      tab[i] = i <= threshold? 0: 255;
+    for (int i = 0; i < 256; ++i){
+      tab[i] = i <= threshold ? 0 : 255;
     }
 
-    for (i = 0; i < len; ++ i){
+    for (int i = 0; i < len; ++i) {
       dst[i] = tab[ src[i] ];
     }
 
@@ -1209,14 +1209,14 @@ class ARDetector {
 };
 
 extern "C" {
-  ARDetector* newARDetector(int width, int height) {
+  ARDetector* newARDetector(const int width, const int height) {
     return new ARDetector(width, height);
   }
 
-  void freeMarkers(std::vector<ARMarker*> *markers) {
+  void freeMarkers(std::vector<ARMarker*>* markers) {
     for (int i = 0, il = markers->size(); i < il; i++) {
-      ARMarker *marker = (*markers)[i];
-      std::vector<CV::Point*> *points = marker->corners;
+      ARMarker* marker = (*markers)[i];
+      std::vector<CV::Point*>* points = marker->corners;
       for (int j = 0, jl = marker->corners->size(); j < jl; j++) {
         delete (*points)[j];
       }
