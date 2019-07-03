@@ -19,12 +19,12 @@ void imageConvolute(const unsigned char *data,
           const int sx = x + wx - halfWWidth;
           if (sx < 0 || sx >= width)
             continue;
-            const int index = sy * width + sx;
-            const double weight = weights[wy * wwidth + wx];
-            r += data[index * 4 + 0] * weight;
-            g += data[index * 4 + 1] * weight;
-            b += data[index * 4 + 2] * weight;
-            a += data[index * 4 + 3] * weight;
+          const int index = sy * width + sx;
+          const double weight = weights[wy * wwidth + wx];
+          r += data[index * 4 + 0] * weight;
+          g += data[index * 4 + 1] * weight;
+          b += data[index * 4 + 2] * weight;
+          a += data[index * 4 + 3] * weight;
         }
       }
       const int index = y * width + x;
