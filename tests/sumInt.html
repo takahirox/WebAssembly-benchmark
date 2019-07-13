@@ -8,51 +8,79 @@ textarea {
 </style>
 <script id="js_code">
 function jsSumInt(array, n) {
-  var s = 0;
-  for (var i = 0; i < n; i++) {
+  let s = 0;
+  for (let i = 0; i < n; i++) {
     s += array[i];
   }
   return s;
 }
 </script>
+  <script id="page_constants">
+    const loop = 100;
+    const num = 0x8000000;
+    const bytesRequest = num * Int32Array.BYTES_PER_ELEMENT;
+    const pageSize = 64 * 1024;  // Constant per definition of a page size: 64KB
+    const numPages = Math.floor(bytesRequest / pageSize) + 1;
+  </script>
+  <script id="page_objects">
+    let sumIntModule = null;
+    let sumIntInstance = null;
+  </script>
+  <script id="ws_instantiate_code">
+    function initWASMEnvironment(onFinishCb) {
+      const memoryBlock = new WebAssembly.Memory({
+        initial: numPages,
+        maximum: numPages
+      });
+
+      fetch("sumInt.wasm").then(result => {
+        const binary = result.arrayBuffer();
+        binary.then(receivedData => {
+          const rawReceivedBytes = new Uint8Array(receivedData);
+          WebAssembly.instantiate(rawReceivedBytes, {
+            "env": {
+              memory: memoryBlock
+            }
+          }).then(wasmModule => {
+            sumIntModule = wasmModule.module;
+            sumIntInstance = wasmModule.instance;
+
+            onFinishCb(memoryBlock.buffer);
+          });
+        });
+      });
+    }
+  </script>
 <script id="test_code">
 function start() {
-  var sumIntModule = null;
-  var sumIntInstance = null;
-
   function onEnvReady(dataBuffer) {
-    var loop = 100;
-
-    var jsPerformance = document.getElementById('js_performance');
-    var wsPerformance = document.getElementById('ws_performance');
-    var comparison = document.getElementById('comparison');
+    const jsPerformance = document.getElementById('js_performance');
+    const wsPerformance = document.getElementById('ws_performance');
+    const comparison = document.getElementById('comparison');
 
     jsPerformance.innerText = '';
     wsPerformance.innerText = '';
     comparison.innerText = '';
 
-    var array = new Int32Array(dataBuffer);
+    let array = new Int32Array(dataBuffer);
 
     function initArray(array) {
-      for (var i = 0, il = array.length; i < il; i++) {
+      for (let i = 0, il = array.length; i < il; i++) {
         array[i] = ((Math.random() * 20000) | 0) - 10000;
       }
     }
 
     function checkFunctionality(array, n) {
-      console.log("trying to check jsSumInt and wsSumInt equality");
-      var eq = jsSumInt(array, n) === wsSumInt(array, n);
-      console.log("finished checking equality: " + eq);
-      return eq;
+      return jsSumInt(array, n) === wsSumInt(array, n);
     }
 
     function run(func, array, loop) {
       func(array, array.length); // warm-up
-      var elapsedTime = 0.0;
-      for (var i = 0; i < loop; i++) {
-        var startTime = performance.now();
+      let elapsedTime = 0.0;
+      for (let i = 0; i < loop; i++) {
+        const startTime = performance.now();
         func(array, array.length);
-        var endTime = performance.now();
+        const endTime = performance.now();
         elapsedTime += (endTime - startTime);
       }
       return (elapsedTime / loop).toFixed(4);
@@ -91,40 +119,17 @@ function start() {
 
   document.getElementById('run_button').disabled = true;
 
-  var num = 0x8000000;
-  var bytesRequest = num * Int32Array.BYTES_PER_ELEMENT;
-  var pageSize = 64 * 1024;  // Constant per definition of a page size: 64KB
-  var numPages = Math.floor(bytesRequest / pageSize) + 1;
-  var memoryBlock = new WebAssembly.Memory({initial: numPages, maximum: numPages});
-
-  fetch("sumInt.wasm").then(function(result) {
-    var binary = result.arrayBuffer();
-    binary.then(function(receivedData) {
-      var rawReceivedBytes = new Uint8Array(receivedData);
-      WebAssembly.instantiate(rawReceivedBytes, {
-        "env": {
-          memory: memoryBlock
-        }
-      }).then(function(wasmModule) {
-        sumIntModule = wasmModule.module;
-        sumIntInstance = wasmModule.instance;
-
-        onEnvReady(memoryBlock.buffer);
-      });
-    });
-  });
+  initWASMEnvironment(onEnvReady);
 }
 </script>
+
 <script>
 function onReady() {
-  console.log("onReady");
   document.getElementById('run_button').disabled = false;
   document.getElementById('message').innerText = 'Ready';
-  console.log("onReady done");
 }
 
 function init() {
-  console.log("init");
   putCode('test_code_area', document.getElementById('test_code').text.trim());
   putCode('js_code_area', document.getElementById('js_code').text.trim());
 
@@ -135,12 +140,13 @@ function init() {
   loadTextFile('sumInt.sh', function(text) {
     putCode('sh_code_area', text.trim());
   });
-  
-  console.log("init finished");
+
+  putCode('ws_instantiate_code_area',
+          document.getElementById('ws_instantiate_code').text.trim());
 }
 
 function loadTextFile(url, callback) {
-  var request = new XMLHttpRequest();
+  const request = new XMLHttpRequest();
   request.open('GET', url);
   request.responseType = 'text';
   request.onload = function (event) {
@@ -150,14 +156,14 @@ function loadTextFile(url, callback) {
 }
 
 function putCode(textareaId, code) {
-  var textarea = document.getElementById(textareaId);
+  const textarea = document.getElementById(textareaId);
   textarea.value = code;
   textarea.setAttribute('rows', code.split('\n').length);
 }
 
 function switchDisplay(div) {
-  var textarea = div.getElementsByTagName('textarea')[0];
-  var p = div.getElementsByTagName('p')[0];
+  const textarea = div.getElementsByTagName('textarea')[0];
+  const p = div.getElementsByTagName('p')[0];
   p.textContent = p.textContent.slice(2);
   if (textarea.style.display === 'none') {
     textarea.style.display = '';
