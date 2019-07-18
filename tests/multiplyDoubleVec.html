@@ -6,130 +6,139 @@ textarea {
   width: 640px;
 }
 </style>
-<script src="multiplyDoubleVec.js"></script>
 <script id="js_code">
 function jsMultiplyDoubleVec(src1, src2, res, n) {
-  for (var i = 0; i < n; i++) {
+  for (let i = 0; i < n; i++) {
     res[i] = src1[i] * src2[i];
   }
 }
 </script>
-<script id="ws_instantiate_code">
-var module, functions = {};
-fetch('multiplyDoubleVec.wasm')
-  .then(response => response.arrayBuffer())
-  .then(buffer => new Uint8Array(buffer))
-  .then(binary => {
-    var moduleArgs = {
-      wasmBinary: binary,
-      onRuntimeInitialized: function () {
-        functions.multiplyDoubleVec =
-          module.cwrap('multiplyDoubleVec',
-                       null,
-                       ['number', 'number', 'number', 'number']);
-        onReady();
-      }
-    };
-    module = Module(moduleArgs);
-  });
-</script>
+  <script id="page_constants">
+    const loop = 100;
+    const num = 0x2000000;
+
+    const array1Bytes = Float64Array.BYTES_PER_ELEMENT * num;
+    const array2Bytes = Float64Array.BYTES_PER_ELEMENT * num;
+    const resultArrayBytes = Float64Array.BYTES_PER_ELEMENT * num;
+    const bytesRequest = array1Bytes + array2Bytes + resultArrayBytes;
+    const pageSize = 64 * 1024;  // Constant per definition of a page size: 64KB
+    const numPages = Math.max(Math.floor(bytesRequest / pageSize) + 1, 256);
+  </script>
+  <script id="page_objects">
+    let multiplyDoubleVecModule = null;
+    let multiplyDoubleVecInstance = null;
+  </script>
+  <script id="ws_instantiate_code">
+    function initWASMEnvironment(onFinishCb) {
+      const memoryBlock = new WebAssembly.Memory({
+        initial: numPages,
+        maximum: numPages
+      });
+
+      fetch("multiplyDoubleVec.wasm").then(result => {
+        const binary = result.arrayBuffer();
+        binary.then(receivedData => {
+          const rawReceivedBytes = new Uint8Array(receivedData);
+          WebAssembly.instantiate(rawReceivedBytes, {
+            "env": {
+              memory: memoryBlock
+            }
+          }).then(wasmModule => {
+            multiplyDoubleVecModule = wasmModule.module;
+            multiplyDoubleVecInstance = wasmModule.instance;
+
+            onFinishCb(memoryBlock.buffer);
+          });
+        });
+      });
+    }
+  </script>
 <script id="test_code">
 function start() {
+  function onEnvReady(memboryBuffer) {
+    const jsPerformance = document.getElementById('js_performance');
+    const wsPerformance = document.getElementById('ws_performance');
+    const comparison = document.getElementById('comparison');
+
+    jsPerformance.innerText = '';
+    wsPerformance.innerText = '';
+    comparison.innerText = '';
+
+    const src1 = new Float64Array(memboryBuffer, 0, num);
+    const src2 = new Float64Array(memboryBuffer, array1Bytes, num);
+
+    const res1 = new Float64Array(num); // for JavaScript
+    const res2 = new Float64Array(memboryBuffer, array1Bytes + array2Bytes, num); // for WebAssembly
+
+    function initArray(array) {
+      for (let i = 0, il = array.length; i < il; i++) {
+        array[i] = Math.random() * 20000 - 10000;
+      }
+    }
+
+    function equalArray(array1, array2) {
+      if (array1.length !== array2.length) return false;
+      for (let i = 0, il = array1.length; i < il; i++) {
+        if (array1[i] !== array2[i])
+          return false;
+      }
+      return true;
+    }
+
+    function checkFunctionality() {
+      jsMultiplyDoubleVec(src1, src2, res1, src1.length);
+      wsMultiplyDoubleVec(src1, src2, res2, src1.length);
+      return equalArray(res1, res2);
+    }
+
+    function run(func, src1, src2, res, loop) {
+      func(src1, src2, res, src1.length);
+      let elapsedTime = 0.0;
+      for (var i = 0; i < loop; i++) {
+        const startTime = performance.now();
+        func(src1, src2, res, src1.length);
+        const endTime = performance.now();
+        elapsedTime += (endTime - startTime);
+      }
+      return (elapsedTime / loop).toFixed(4);
+    }
+
+    function wsMultiplyDoubleVec(src1, src2, res, n) {
+      multiplyDoubleVecInstance.exports._multiplyDoubleVec(0, array1Bytes, array1Bytes + array2Bytes, num);
+    }
+
+    initArray(src1);
+    initArray(src2);
+
+    // don't use Promise for the non Promise support browsers so far.
+    setTimeout(function () {
+      if (!checkFunctionality()) {
+        document.getElementById('message').innerText =
+                'Two functions seem not equeal';
+        document.getElementById('run_button').disabled = false;
+        return;
+      }
+      setTimeout(function () {
+        jsPerformance.innerText = run(jsMultiplyDoubleVec, src1, src2, res1, loop);
+        setTimeout(function () {
+          wsPerformance.innerText = run(wsMultiplyDoubleVec, src1, src2, res2, loop);
+          comparison.innerText =
+                  (Number(jsPerformance.innerText) /
+                          Number(wsPerformance.innerText)).toFixed(4);
+          document.getElementById('message').innerText = 'Done';
+          document.getElementById('run_button').disabled = false;
+        });
+        document.getElementById('message').innerText = 'Running WebAssembly';
+      });
+      document.getElementById('message').innerText = 'Running JavaScript';
+    });
+
+    document.getElementById('message').innerText = 'Checking equality';
+  }
+
   document.getElementById('run_button').disabled = true;
 
-  var num = 0x2000000;
-  var loop = 100;
-
-  var jsPerformance = document.getElementById('js_performance');
-  var wsPerformance = document.getElementById('ws_performance');
-  var comparison = document.getElementById('comparison');
-
-  jsPerformance.innerText = '';
-  wsPerformance.innerText = '';
-  comparison.innerText = '';
-
-  var src1 = new Float64Array(num);
-  var src2 = new Float64Array(num);
-
-  var res1 = new Float64Array(num); // for JavaScript
-  var res2 = new Float64Array(num); // for WebAssembly
-
-  initArray(src1);
-  initArray(src2);
-
-  function initArray(array) {
-    for (var i = 0, il = array.length; i < il; i++) {
-      array[i] = Math.random() * 20000 - 10000;
-    }
-  }
-
-  function equalArray(array1, array2) {
-    if (array1.length !== array2.length) return false;
-    for (var i = 0, il = array1.length; i < il; i++) {
-      if (array1[i] !== array2[i])
-        return false;
-    }
-    return true;
-  }
-
-  function checkFunctionality() {
-    jsMultiplyDoubleVec(src1, src2, res1, src1.length);
-    wsMultiplyDoubleVec(src1, src2, res2, src1.length);
-    return equalArray(res1, res2);
-  }
-
-  function run(func, src1, src2, res, loop) {
-    func(src1, src2, res, src1.length);
-    var elapsedTime = 0.0;
-    for (var i = 0; i < loop; i++) {
-      var startTime = performance.now();
-      func(src1, src2, res, src1.length);
-      var endTime = performance.now();
-      elapsedTime += (endTime - startTime);
-    }
-    return (elapsedTime / loop).toFixed(4);
-  }
-
-  function wsMultiplyDoubleVec(src1, src2, res, n) {
-    var pointer1 = module._malloc(src1.length * 8);
-    var pointer2 = module._malloc(src2.length * 8);
-    var pointer3 = module._malloc(res.length * 8);
-    var offset1 = pointer1 / 8;
-    var offset2 = pointer2 / 8;
-    var offset3 = pointer3 / 8;
-    module.HEAPF64.set(src1, offset1);
-    module.HEAPF64.set(src2, offset2);
-    functions.multiplyDoubleVec(pointer1, pointer2, pointer3, n);
-    res.set(module.HEAPF64.subarray(offset3, offset3 + n));
-    module._free(pointer1);
-    module._free(pointer2);
-    module._free(pointer3);
-  }
-
-  // don't use Promise for the non Promise support browsers so far.
-  setTimeout(function () {
-    if (! checkFunctionality()) {
-      document.getElementById('message').innerText =
-       'Two functions seem not equeal';
-      document.getElementById('run_button').disabled = false;
-      return;
-    }
-    setTimeout(function () {
-      jsPerformance.innerText = run(jsMultiplyDoubleVec, src1, src2, res1, loop);
-      setTimeout(function () {
-        wsPerformance.innerText = run(wsMultiplyDoubleVec, src1, src2, res2, loop);
-        comparison.innerText =
-          (Number(jsPerformance.innerText) /
-             Number(wsPerformance.innerText)).toFixed(4);
-        document.getElementById('message').innerText = 'Done';
-        document.getElementById('run_button').disabled = false;
-      });
-      document.getElementById('message').innerText = 'Running WebAssembly';
-    });
-    document.getElementById('message').innerText = 'Running JavaScript';
-  });
-
-  document.getElementById('message').innerText = 'Checking equality';
+  initWASMEnvironment(onEnvReady);
 }
 </script>
 <script>
@@ -155,7 +164,7 @@ function init() {
 }
 
 function loadTextFile(url, callback) {
-  var request = new XMLHttpRequest();
+  const request = new XMLHttpRequest();
   request.open('GET', url);
   request.responseType = 'text';
   request.onload = function (event) {
@@ -165,14 +174,14 @@ function loadTextFile(url, callback) {
 }
 
 function putCode(textareaId, code) {
-  var textarea = document.getElementById(textareaId);
+  const textarea = document.getElementById(textareaId);
   textarea.value = code;
   textarea.setAttribute('rows', code.split('\n').length);
 }
 
 function switchDisplay(div) {
-  var textarea = div.getElementsByTagName('textarea')[0];
-  var p = div.getElementsByTagName('p')[0];
+  const textarea = div.getElementsByTagName('textarea')[0];
+  const p = div.getElementsByTagName('p')[0];
   p.textContent = p.textContent.slice(2);
   if (textarea.style.display === 'none') {
     textarea.style.display = '';
@@ -187,7 +196,7 @@ function switchDisplay(div) {
 <body onload="init()">
   <div>
     <p>
-      <button id="run_button" onclick="start()" disabled>run</button>
+      <button id="run_button" onclick="start()">run</button>
       <span id="message">Loading WebAssembly</span>
     </p>
     <p>
