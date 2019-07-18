@@ -7,14 +7,14 @@ struct position {
 };
 
 int collisionDetection(const struct position *positions,
-                       const double *radiuses,
-                       unsigned char *res, const int n) {
+                       const double *radii,
+                       unsigned int* res, const int n) {
   int count = 0;
-  for (int i = 0; i < n; i++) {
+  for (unsigned int i = 0; i < n; i++) {
     const struct position* p = &positions[i];
-    const double r = radiuses[i];
+    const double r = radii[i];
     unsigned char collision = 0;
-    for (int j = i + 1; j < n; j++) {
+    for (unsigned int j = i + 1; j < n; j++) {
       const struct position*  p2 = &positions[j];
       const double dx = p->x - p2->x;
       const double dy = p->y - p2->y;
@@ -26,13 +26,14 @@ int collisionDetection(const struct position *positions,
         break;
       }
     }
-    const int index = (i / 8) | 0;
+    const unsigned int index = (i / 8u) | 0u;
     const unsigned char pos = 7 - (i % 8);
     if (collision == 0) {
-      res[index] &= ~(1 << pos);
+      res[index] &= ~(1u << pos);
     } else {
-      res[index] |= (1 << pos);
+      res[index] |= (1u << pos);
     }
   }
   return count;
 }
+
