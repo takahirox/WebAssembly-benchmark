@@ -44,22 +44,6 @@ function jsSumInt(array, n) {
 
         onFinishCb(sumIntInstance.exports.memory.buffer);
       });
-      /* fetch("sumInt.wasm").then(result => {
-        const binary = result.arrayBuffer();
-        binary.then(receivedData => {
-          const rawReceivedBytes = new Uint8Array(receivedData);
-          WebAssembly.instantiate(rawReceivedBytes, {
-            "env": {
-              memory: memoryBlock
-            }
-          }).then(wasmModule => {
-            sumIntModule = wasmModule.module;
-            sumIntInstance = wasmModule.instance;
-
-            onFinishCb(memoryBlock.buffer);
-          });
-        });
-      });*/
     }
   </script>
 <script id="test_code">
