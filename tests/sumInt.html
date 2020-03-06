@@ -17,8 +17,7 @@ function jsSumInt(array, n) {
 </script>
   <script id="page_constants">
     const loop = 100;
-    const num = 0x400000;
-    // const num = 10;
+    const num = 0x8000000;
     const bytesRequest = num * Int32Array.BYTES_PER_ELEMENT;
     const pageSize = 64 * 1024;  // Constant per definition of a page size: 64KB
     const numPages = Math.floor(bytesRequest / pageSize) + 1;
@@ -41,6 +40,10 @@ function jsSumInt(array, n) {
       }).then(wasmModule => {
         sumIntModule = wasmModule.module;
         sumIntInstance = wasmModule.instance;
+
+        const allocatedPages = sumIntInstance.exports.memory.buffer.byteLength / pageSize;
+        const pageSizeIncrease = numPages - allocatedPages;
+        sumIntInstance.exports.memory.grow(pageSizeIncrease);
 
         onFinishCb(sumIntInstance.exports.memory.buffer);
       });

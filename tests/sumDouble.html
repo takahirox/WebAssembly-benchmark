@@ -34,21 +34,18 @@ function jsSumDouble(array, n) {
         maximum: numPages
       });
 
-      fetch("sumDouble.wasm").then(result => {
-        const binary = result.arrayBuffer();
-        binary.then(receivedData => {
-          const rawReceivedBytes = new Uint8Array(receivedData);
-          WebAssembly.instantiate(rawReceivedBytes, {
-            "env": {
-              memory: memoryBlock
-            }
-          }).then(wasmModule => {
-            sumDoubleModule = wasmModule.module;
-            sumDoubleInstance = wasmModule.instance;
+      WebAssembly.instantiateStreaming(fetch("sumDouble.wasm"), {
+        js: {
+          mem: memoryBlock
+        }
+      }).then(wasmModule => {
+        sumDoubleModule = wasmModule.module;
+        sumDoubleInstance = wasmModule.instance;
 
-            onFinishCb(memoryBlock.buffer);
-          });
-        });
+        const allocatedPages = sumDoubleInstance.exports.memory.buffer.byteLength / pageSize;
+        const pageSizeIncrease = numPages - allocatedPages;
+        sumDoubleInstance.exports.memory.grow(pageSizeIncrease);
+        onFinishCb(sumDoubleInstance.exports.memory.buffer);
       });
     }
   </script>
@@ -65,8 +62,8 @@ function start() {
 
     let array = new Float64Array(dataBuffer);
 
-    function initArray(array) {
-      for (let i = 0, il = array.length; i < il; i++) {
+    function initArray(array, n) {
+      for (let i = 0, il = n; i < il; i++) {
         array[i] = Math.random() * 20000 - 10000;
       }
     }
@@ -88,10 +85,10 @@ function start() {
     }
 
     function wsSumDouble(array, n) {
-      return sumDoubleInstance.exports._sumDouble(0, n);
+      return sumDoubleInstance.exports.sumDouble(0, n);
     }
 
-    initArray(array);
+    initArray(array, num);
 
     // don't use Promise for the non Promise support browsers so far.
     setTimeout(function () {
