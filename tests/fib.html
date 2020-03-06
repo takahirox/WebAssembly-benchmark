@@ -60,7 +60,7 @@ function start() {
     comparison.innerText = '';
 
     function checkFunctionality(n) {
-      return jsFib(n) === fibInstance.exports._fib(n);
+      return jsFib(n) === fibInstance.exports.fib(n);
     }
 
     function run(func, n, loop) {
@@ -84,7 +84,7 @@ function start() {
       setTimeout(function () {
         jsPerformance.innerText = run(jsFib, num, loop);
         setTimeout(function () {
-          wsPerformance.innerText = run(fibInstance.exports._fib, num, loop);
+          wsPerformance.innerText = run(fibInstance.exports.fib, num, loop);
           comparison.innerText =
                   (Number(jsPerformance.innerText) /
                           Number(wsPerformance.innerText)).toFixed(4);
