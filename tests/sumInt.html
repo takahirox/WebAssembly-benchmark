@@ -17,7 +17,8 @@ function jsSumInt(array, n) {
 </script>
   <script id="page_constants">
     const loop = 100;
-    const num = 0x8000000;
+    const num = 0x400000;
+    // const num = 10;
     const bytesRequest = num * Int32Array.BYTES_PER_ELEMENT;
     const pageSize = 64 * 1024;  // Constant per definition of a page size: 64KB
     const numPages = Math.floor(bytesRequest / pageSize) + 1;
@@ -33,7 +34,17 @@ function jsSumInt(array, n) {
         maximum: numPages
       });
 
-      fetch("sumInt.wasm").then(result => {
+      WebAssembly.instantiateStreaming(fetch("sumInt.wasm"), {
+        js: {
+          mem: memoryBlock
+        }
+      }).then(wasmModule => {
+        sumIntModule = wasmModule.module;
+        sumIntInstance = wasmModule.instance;
+
+        onFinishCb(sumIntInstance.exports.memory.buffer);
+      });
+      /* fetch("sumInt.wasm").then(result => {
         const binary = result.arrayBuffer();
         binary.then(receivedData => {
           const rawReceivedBytes = new Uint8Array(receivedData);
@@ -48,7 +59,7 @@ function jsSumInt(array, n) {
             onFinishCb(memoryBlock.buffer);
           });
         });
-      });
+      });*/
     }
   </script>
 <script id="test_code">
@@ -62,10 +73,10 @@ function start() {
     wsPerformance.innerText = '';
     comparison.innerText = '';
 
-    let array = new Int32Array(dataBuffer);
+    let array = new Int32Array(dataBuffer, 0, num);
 
-    function initArray(array) {
-      for (let i = 0, il = array.length; i < il; i++) {
+    function initArray(array, n) {
+      for (let i = 0, il = n; i < il; i++) {
         array[i] = ((Math.random() * 20000) | 0) - 10000;
       }
     }
@@ -87,10 +98,10 @@ function start() {
     }
 
     function wsSumInt(array, n) {
-      return sumIntInstance.exports._sumInt(0, n);
+      return sumIntInstance.exports.sumInt(0, n);
     }
 
-    initArray(array);
+    initArray(array, num);
     // don't use Promise for the non Promise support browsers so far.
     setTimeout(function () {
       if (! checkFunctionality(array, num)) {
