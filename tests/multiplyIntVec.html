@@ -35,21 +35,19 @@ function jsMultiplyIntVec(src1, src2, res, n) {
         maximum: numPages
       });
 
-      fetch("multiplyIntVec.wasm").then(result => {
-        const binary = result.arrayBuffer();
-        binary.then(receivedData => {
-          const rawReceivedBytes = new Uint8Array(receivedData);
-          WebAssembly.instantiate(rawReceivedBytes, {
-            "env": {
-              memory: memoryBlock
-            }
-          }).then(wasmModule => {
-            multiplyIntVecModule = wasmModule.module;
-            multiplyIntVecInstance = wasmModule.instance;
+      WebAssembly.instantiateStreaming(fetch("multiplyIntVec.wasm"), {
+        js: {
+          mem: memoryBlock
+        }
+      }).then(wasmModule => {
+        multiplyIntVecModule = wasmModule.module;
+        multiplyIntVecInstance = wasmModule.instance;
 
-            onFinishCb(memoryBlock.buffer);
-          });
-        });
+        const allocatedPages = multiplyIntVecInstance.exports.memory.buffer.byteLength / pageSize;
+        const pageSizeIncrease = numPages - allocatedPages;
+        multiplyIntVecInstance.exports.memory.grow(pageSizeIncrease);
+
+        onFinishCb(multiplyIntVecInstance.exports.memory.buffer);
       });
     }
   </script>
@@ -107,7 +105,7 @@ function start() {
     }
 
     function wsMultiplyIntVec(src1, src2, res, n) {
-      return multiplyIntVecInstance.exports._multiplyIntVec(0, array1Bytes, array1Bytes + array2Bytes, n);
+      return multiplyIntVecInstance.exports.multiplyIntVec(0, array1Bytes, array1Bytes + array2Bytes, n);
     }
 
     initArray(src1);
