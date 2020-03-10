@@ -6,94 +6,109 @@ textarea {
   width: 640px;
 }
 </style>
-<script src="multiplyInt.js"></script>
 <script id="js_code">
 function jsMultiplyInt(a, b, n) {
-  var c = 1.0;
-  for (var i = 0; i < n; i++) {
-    c = c * a * b;
+  let c = 1|0;
+  a = a|0;
+  b = b|0;
+  n = n|0;
+  for (let i = 0; i < n; i++) {
+    c = Math.imul(Math.imul(a, b), c);
   }
   return c;
 }
 </script>
-<script id="ws_instantiate_code">
-var module, functions = {};
-fetch('multiplyInt.wasm')
-  .then(response => response.arrayBuffer())
-  .then(buffer => new Uint8Array(buffer))
-  .then(binary => {
-    var moduleArgs = {
-      wasmBinary: binary,
-      onRuntimeInitialized: function () {
-        functions.multiplyInt =
-          module.cwrap('multiplyInt',
-                       'number',
-                       ['number', 'number', 'number']);
-        onReady();
-      }
-    };
-    module = Module(moduleArgs);
-  });
-</script>
+  <script id="page_constants">
+    const loop = 100;
+    const num = 0x2000000;
+
+    const numPages = 256;
+  </script>
+  <script id="page_objects">
+    let multiplyIntModule = null;
+    let multiplyIntInstance = null;
+  </script>
+  <script id="ws_instantiate_code">
+    function initWASMEnvironment(onFinishCb) {
+      const memoryBlock = new WebAssembly.Memory({
+        initial: numPages,
+        maximum: numPages
+      });
+
+      WebAssembly.instantiateStreaming(fetch("multiplyInt.wasm"), {
+        js: {
+          mem: memoryBlock
+        }
+      }).then(wasmModule => {
+        multiplyIntModule = wasmModule.module;
+        multiplyIntInstance = wasmModule.instance;
+
+        onFinishCb(multiplyIntInstance.exports.memory.buffer);
+      });
+    }
+  </script>
 <script id="test_code">
 function start() {
+  function onEnvReady(memoryBuffer) {
+    const jsPerformance = document.getElementById('js_performance');
+    const wsPerformance = document.getElementById('ws_performance');
+    const comparison = document.getElementById('comparison');
+
+    jsPerformance.innerText = '';
+    wsPerformance.innerText = '';
+    comparison.innerText = '';
+
+    function checkFunctionality(n) {
+      let js = jsMultiplyInt(1, 1, n);
+      let ws = multiplyIntInstance.exports.multiplyInt(1, 1, n);
+      return jsMultiplyInt(1, 1, n) ===
+              multiplyIntInstance.exports.multiplyInt(1, 1, n);
+    }
+
+    function run(func, n, loop) {
+      func(n); // warm-up
+      let elapsedTime = 0.0;
+      for (let i = 0; i < loop; i++) {
+        const startTime = performance.now();
+        func(1, 1, n);
+        const endTime = performance.now();
+        elapsedTime += (endTime - startTime);
+      }
+      return (elapsedTime / loop).toFixed(4);
+    }
+
+    // don't use Promise for the non Promise support browsers so far.
+    setTimeout(function () {
+      if (! checkFunctionality(num)) {
+        document.getElementById('message').innerText =
+         'Two functions seem not equal';
+        document.getElementById('run_button').disabled = false;
+        return;
+      }
+      setTimeout(function () {
+        jsPerformance.innerText = run(jsMultiplyInt, num, loop);
+        setTimeout(function () {
+          wsPerformance.innerText = run(multiplyIntInstance.exports.multiplyInt, num, loop);
+          comparison.innerText =
+            (Number(jsPerformance.innerText) /
+               Number(wsPerformance.innerText)).toFixed(4);
+          document.getElementById('message').innerText = 'Done';
+          document.getElementById('run_button').disabled = false;
+        });
+        document.getElementById('message').innerText = 'Running WebAssembly';
+      });
+      document.getElementById('message').innerText = 'Running JavaScript';
+    });
+
+    document.getElementById('message').innerText = 'Checking equality';
+  }
+
   document.getElementById('run_button').disabled = true;
 
-  var num = 0x10000000;
-  var loop = 100;
-
-  var jsPerformance = document.getElementById('js_performance');
-  var wsPerformance = document.getElementById('ws_performance');
-  var comparison = document.getElementById('comparison');
-
-  jsPerformance.innerText = '';
-  wsPerformance.innerText = '';
-  comparison.innerText = '';
-
-  function checkFunctionality(n) {
-    return jsMultiplyInt(1.0, 1.0, n) ===
-             functions.multiplyInt(1.0, 1.0, n);
-  }
-
-  function run(func, n, loop) {
-    func(n); // warm-up
-    var elapsedTime = 0.0;
-    for (var i = 0; i < loop; i++) {
-      var startTime = performance.now();
-      func(1.0, 1.0, n);
-      var endTime = performance.now();
-      elapsedTime += (endTime - startTime);
-    }
-    return (elapsedTime / loop).toFixed(4);
-  }
-
-  // don't use Promise for the non Promise support browsers so far.
-  setTimeout(function () {
-    if (! checkFunctionality(num)) {
-      document.getElementById('message').innerText =
-       'Two functions seem not equeal';
-      document.getElementById('run_button').disabled = false;
-      return;
-    }
-    setTimeout(function () {
-      jsPerformance.innerText = run(jsMultiplyInt, num, loop);
-      setTimeout(function () {
-        wsPerformance.innerText = run(functions.multiplyInt, num, loop);
-        comparison.innerText =
-          (Number(jsPerformance.innerText) /
-             Number(wsPerformance.innerText)).toFixed(4);
-        document.getElementById('message').innerText = 'Done';
-        document.getElementById('run_button').disabled = false;
-      });
-      document.getElementById('message').innerText = 'Running WebAssembly';
-    });
-    document.getElementById('message').innerText = 'Running JavaScript';
-  });
-
-  document.getElementById('message').innerText = 'Checking equality';
+  initWASMEnvironment(onEnvReady);
 }
 </script>
-<script>
+  <script>
 function onReady() {
   document.getElementById('run_button').disabled = false;
   document.getElementById('message').innerText = 'Ready';
@@ -148,7 +163,7 @@ function switchDisplay(div) {
 <body onload="init()">
   <div>
     <p>
-      <button id="run_button" onclick="start()" disabled>run</button>
+      <button id="run_button" onclick="start()">run</button>
       <span id="message">Loading WebAssembly</span>
     </p>
     <p>
