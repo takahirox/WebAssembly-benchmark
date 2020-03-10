@@ -14,78 +14,94 @@ function jsFib(n) {
   return jsFib(n-1) + jsFib(n-2);
 }
 </script>
-<script id="ws_instantiate_code">
-var module, functions = {};
-fetch('fib.wasm')
-  .then(response => response.arrayBuffer())
-  .then(buffer => new Uint8Array(buffer))
-  .then(binary => {
-    var moduleArgs = {
-      wasmBinary: binary,
-      onRuntimeInitialized: function () {
-        functions.fib =
-          module.cwrap('fib',
-                       'number',
-                       ['number']);
-        onReady();
-      }
-    };
-    module = Module(moduleArgs);
-  });
-</script>
+  <script id="page_constants">
+    const loop = 10;
+    const num = 0x28;
+    const numPages = 256;  // Known default memory size
+  </script>
+  <script id="page_objects">
+    let fibModule = null;
+    let fibInstance = null;
+  </script>
+  <script id="ws_instantiate_code">
+    function initWASMEnvironment(onFinishCb) {
+      const memoryBlock = new WebAssembly.Memory({
+        initial: numPages,
+        maximum: numPages
+      });
+
+      fetch("fib.wasm").then(result => {
+        const binary = result.arrayBuffer();
+        binary.then(receivedData => {
+          const rawReceivedBytes = new Uint8Array(receivedData);
+          WebAssembly.instantiate(rawReceivedBytes, {
+            "env": {
+              memory: memoryBlock
+            }
+          }).then(wasmModule => {
+            fibModule = wasmModule.module;
+            fibInstance = wasmModule.instance;
+
+            onFinishCb(memoryBlock.buffer);
+          });
+        });
+      });
+    }
+  </script>
 <script id="test_code">
 function start() {
+  function onEnvReady() {
+    const jsPerformance = document.getElementById('js_performance');
+    const wsPerformance = document.getElementById('ws_performance');
+    const comparison = document.getElementById('comparison');
+
+    jsPerformance.innerText = '';
+    wsPerformance.innerText = '';
+    comparison.innerText = '';
+
+    function checkFunctionality(n) {
+      return jsFib(n) === fibInstance.exports.fib(n);
+    }
+
+    function run(func, n, loop) {
+      func(n); // warm-up
+      const startTime = performance.now();
+      for (let i = 0; i < loop; i++) {
+        func(n);
+      }
+      const endTime = performance.now();
+      return ((endTime - startTime) / loop).toFixed(4);
+    }
+
+    // don't use Promise for the non Promise support browsers so far.
+    setTimeout(function () {
+      if (!checkFunctionality(num)) {
+        document.getElementById('message').innerText =
+                'Two functions seem not equeal';
+        document.getElementById('run_button').disabled = false;
+        return;
+      }
+      setTimeout(function () {
+        jsPerformance.innerText = run(jsFib, num, loop);
+        setTimeout(function () {
+          wsPerformance.innerText = run(fibInstance.exports.fib, num, loop);
+          comparison.innerText =
+                  (Number(jsPerformance.innerText) /
+                          Number(wsPerformance.innerText)).toFixed(4);
+          document.getElementById('message').innerText = 'Done';
+          document.getElementById('run_button').disabled = false;
+        });
+        document.getElementById('message').innerText = 'Running WebAssembly';
+      });
+      document.getElementById('message').innerText = 'Running JavaScript';
+    });
+
+    document.getElementById('message').innerText = 'Checking equality';
+  }
+
   document.getElementById('run_button').disabled = true;
 
-  var num = 0x28;
-  var loop = 10;
-
-  var jsPerformance = document.getElementById('js_performance');
-  var wsPerformance = document.getElementById('ws_performance');
-  var comparison = document.getElementById('comparison');
-
-  jsPerformance.innerText = '';
-  wsPerformance.innerText = '';
-  comparison.innerText = '';
-
-  function checkFunctionality(n) {
-    return jsFib(n) === functions.fib(n);
-  }
-
-  function run(func, n, loop) {
-    func(n); // warm-up
-    var startTime = performance.now();
-    for (var i = 0; i < loop; i++) {
-      func(n);
-    }
-    var endTime = performance.now();
-    return ((endTime - startTime) / loop).toFixed(4);
-  }
-
-  // don't use Promise for the non Promise support browsers so far.
-  setTimeout(function () {
-    if (! checkFunctionality(num)) {
-      document.getElementById('message').innerText =
-       'Two functions seem not equeal';
-      document.getElementById('run_button').disabled = false;
-      return;
-    }
-    setTimeout(function () {
-      jsPerformance.innerText = run(jsFib, num, loop);
-      setTimeout(function () {
-        wsPerformance.innerText = run(functions.fib, num, loop);
-        comparison.innerText =
-          (Number(jsPerformance.innerText) /
-             Number(wsPerformance.innerText)).toFixed(4);
-        document.getElementById('message').innerText = 'Done';
-        document.getElementById('run_button').disabled = false;
-      });
-      document.getElementById('message').innerText = 'Running WebAssembly';
-    });
-    document.getElementById('message').innerText = 'Running JavaScript';
-  });
-
-  document.getElementById('message').innerText = 'Checking equality';
+  initWASMEnvironment(onEnvReady);
 }
 </script>
 <script>
@@ -111,7 +127,7 @@ function init() {
 }
 
 function loadTextFile(url, callback) {
-  var request = new XMLHttpRequest();
+  const request = new XMLHttpRequest();
   request.open('GET', url);
   request.responseType = 'text';
   request.onload = function (event) {
@@ -121,14 +137,14 @@ function loadTextFile(url, callback) {
 }
 
 function putCode(textareaId, code) {
-  var textarea = document.getElementById(textareaId);
+  const textarea = document.getElementById(textareaId);
   textarea.value = code;
   textarea.setAttribute('rows', code.split('\n').length);
 }
 
 function switchDisplay(div) {
-  var textarea = div.getElementsByTagName('textarea')[0];
-  var p = div.getElementsByTagName('p')[0];
+  const textarea = div.getElementsByTagName('textarea')[0];
+  const p = div.getElementsByTagName('p')[0];
   p.textContent = p.textContent.slice(2);
   if (textarea.style.display === 'none') {
     textarea.style.display = '';
@@ -143,7 +159,7 @@ function switchDisplay(div) {
 <body onload="init()">
   <div>
     <p>
-      <button id="run_button" onclick="start()" disabled>run</button>
+      <button id="run_button" onclick="start()">run</button>
       <span id="message">Loading WebAssembly</span>
     </p>
     <p>

@@ -1,6 +1,7 @@
-int sumInt(int *array, int n) {
+int sumInt(const int* array, const int n) {
   int s = 0;
-  for (int i = 0; i < n; i++) {
+  int i = 0;
+  for (; i < n; i++) {
     s += array[i];
   }
   return s;

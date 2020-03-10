@@ -1,7 +1,7 @@
 emcc multiplyInt.c \
-  -Os \
-  -s WASM=1 \
-  -s MODULARIZE=1 \
-  -s DEMANGLE_SUPPORT=1 \
+  -O3 \
+  -ffast-math \
+  -s ALLOW_MEMORY_GROWTH=1 \
   -s "EXPORTED_FUNCTIONS=['_multiplyInt']" \
-  -o multiplyInt.js
+  -o multiplyInt.wasm
+

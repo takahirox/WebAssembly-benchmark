@@ -1,23 +1,23 @@
 // from https://pdfs.semanticscholar.org/8d74/418ec3c4e2ff45b72e723ac0fbe5fcd58620.pdf
-void imageThreshold(unsigned char *data, int width, int height) {
+void imageThreshold(unsigned char *data, const int width, const int height) {
   int array[width * height];
-  int s = 8;
-  int s2 = s / 2;
-  int t = 15;
-  double t2 = (double)(100 - t) / 100.0;
+  const int s = 8;
+  const int s2 = s / 2;
+  const int t = 15;
+  const double t2 = (double)(100 - t) / 100.0;
   for (int i = 0; i < width; i++) {
     int sum = 0;
     for (int j = 0; j < height; j++) {
-      int index = j * width + i;
-      unsigned char r = data[index * 4 + 0];
-      unsigned char g = data[index * 4 + 1];
-      unsigned char b = data[index * 4 + 2];
-      data[index * 4] = ((unsigned char)(0.2126*r + 0.7152*g + 0.0722*b));
+      const int index = j * width + i;
+      const unsigned char r = data[index * 4 + 0];
+      const unsigned char g = data[index * 4 + 1];
+      const unsigned char b = data[index * 4 + 2];
+      data[index * 4] = ((unsigned char)(0.2126 * r + 0.7152 * g + 0.0722 * b));
       sum += data[index * 4];
       if (i == 0) {
         array[index] = sum;
       } else {
-        array[index] = array[index-1] + sum;
+        array[index] = array[index - 1] + sum;
       }
     }
   }
@@ -35,13 +35,13 @@ void imageThreshold(unsigned char *data, int width, int height) {
       if (y1 < 0) y1 = 0;
       if (y2 >= height) y2 = height - 1;
       if (y1_1 < 0) y1_1 = 0;
-      int count = (x2 - x1) * (y2 - y1);
-      int index = j * width + i;
-      int index1 = y2 * width + x2;
-      int index2 = y1_1 * width + x2;
-      int index3 = y2 * width + x1_1;
-      int index4 = y1_1 * width + x1_1;
-      int sum = array[index1] - array[index2] - array[index3] + array[index4];
+      const int count = (x2 - x1) * (y2 - y1);
+      const int index = j * width + i;
+      const int index1 = y2 * width + x2;
+      const int index2 = y1_1 * width + x2;
+      const int index3 = y2 * width + x1_1;
+      const int index4 = y1_1 * width + x1_1;
+      const int sum = array[index1] - array[index2] - array[index3] + array[index4];
       if (data[index * 4] * count <= sum * t2) {
         data[index * 4 + 0] = data[index * 4 + 1] = data[index * 4 + 2] = 0;
       } else {
