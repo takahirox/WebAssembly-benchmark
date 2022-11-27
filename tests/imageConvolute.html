@@ -8,7 +8,9 @@ textarea {
 </style>
 <script src="imageConvolute.js"></script>
 <script id="js_code">
-function jsImageConvolute(data, data2, width, height,
+function _jsImageConvolute(stdlib, ffi, heap) {
+  "use asm";
+function jsImageConvolut(data, data2, width, height,
                           weights, wwidth, wheight) {
   var halfWWidth = (wwidth / 2) | 0;
   var halfWHeight = (wheight / 2) | 0;
@@ -42,6 +44,10 @@ function jsImageConvolute(data, data2, width, height,
     }
   }
 }
+  return jsImageConvolut;
+};
+  
+let jsImageConvolute = _jsImageConvolute({}, {}, {});
 </script>
 <script id="ws_instantiate_code">
 var module, functions = {};
